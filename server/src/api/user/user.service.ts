@@ -15,6 +15,7 @@ export class UserService {
         createdAt: true,
         name: true,
         role: true,
+        profileImage: true,
       },
     });
 
@@ -35,6 +36,7 @@ export class UserService {
         createdAt: true,
         name: true,
         role: true,
+        profileImage: true,
       },
     });
 
