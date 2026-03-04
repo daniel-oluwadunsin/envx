@@ -6,4 +6,7 @@ export class UpdateUserDto {
 
   @IsString(true)
   email?: string;
+
+  @IsString(true)
+  profileImage?: string;
 }

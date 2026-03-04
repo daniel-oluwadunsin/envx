@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,37 +74,36 @@ export default function OrganizationsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {organizations.map((org) => (
-          <Card
-            key={org.id}
-            className="group cursor-pointer transition-colors hover:border-foreground/10"
-          >
-            <CardHeader className="flex flex-row items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
-                  <Building2 className="h-5 w-5 text-foreground" />
+          <Link key={org.id} href={`/dashboard/org/${org.id}`}>
+            <Card className="group cursor-pointer transition-all hover:shadow-md hover:border-foreground/20 h-full">
+              <CardHeader className="flex flex-row items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
+                    <Building2 className="h-5 w-5 text-foreground" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{org.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{org.slug}</p>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-base">{org.name}</CardTitle>
-                  <p className="text-xs text-muted-foreground">{org.slug}</p>
+                <Badge variant="outline" className="text-xs font-normal">
+                  Owner
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    {org.members} members
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <FolderKanban className="h-3.5 w-3.5" />
+                    {org.projects} projects
+                  </span>
                 </div>
-              </div>
-              <Badge variant="outline" className="text-xs font-normal">
-                Owner
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" />
-                  {org.members} members
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <FolderKanban className="h-3.5 w-3.5" />
-                  {org.projects} projects
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
     </div>
