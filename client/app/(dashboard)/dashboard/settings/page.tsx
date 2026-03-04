@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Camera } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -51,10 +52,13 @@ import { toast } from "sonner";
 export default function SettingsPage() {
   const { user } = useUserInfo();
   const [name, setName] = useState(user?.name || "");
+  const [profileImage, setProfileImage] = useState(user?.profileImage || "");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreview, setImagePreview] = useState(user?.profileImage || "");
 
   const { mutateAsync: updateUserMutate, isPending: loading } = useMutation({
     mutationKey: ["updateUser"],
-    mutationFn: (name: string) => updateUser({ name }),
+    mutationFn: (data: { name: string; profileImage?: string }) => updateUser(data),
     onSuccess: () => {
       toast.success("Profile updated", {
         description: "Your profile has been updated successfully.",
@@ -64,6 +68,23 @@ export default function SettingsPage() {
       });
     },
   });
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setImagePreview(base64String);
+        setProfileImage(base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageUploadClick = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <div className="mx-auto max-w-3xl p-6">
@@ -82,14 +103,31 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16">
-              <AvatarFallback className="bg-secondary text-lg text-secondary-foreground">
-                {user?.name
-                  ?.split(" ")
-                  ?.map((n) => n[0])
-                  ?.join("")}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-16 w-16">
+                {imagePreview && <AvatarImage src={imagePreview} alt={user?.name} />}
+                <AvatarFallback className="bg-secondary text-lg text-secondary-foreground">
+                  {user?.name
+                    ?.split(" ")
+                    ?.map((n) => n[0])
+                    ?.join("")}
+                </AvatarFallback>
+              </Avatar>
+              <button
+                onClick={handleImageUploadClick}
+                className="absolute bottom-0 right-0 rounded-full bg-primary p-1.5 text-primary-foreground shadow-lg hover:bg-primary/90"
+                aria-label="Upload profile picture"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
             <div>
               <p className="font-medium">{user?.name}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -110,8 +148,16 @@ export default function SettingsPage() {
             <Button
               size="sm"
               loading={loading}
-              disabled={name === user?.name || !name?.trim()}
-              onClick={() => updateUserMutate(name)}
+              disabled={
+                (name === user?.name && profileImage === user?.profileImage) ||
+                !name?.trim()
+              }
+              onClick={() =>
+                updateUserMutate({
+                  name,
+                  profileImage: profileImage !== user?.profileImage ? profileImage : undefined,
+                })
+              }
             >
               Save Changes
             </Button>

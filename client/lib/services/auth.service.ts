@@ -49,7 +49,7 @@ export const getUser = async () => {
   }
 };
 
-export const updateUser = async (data: { name?: string }) => {
+export const updateUser = async (data: { name?: string; profileImage?: string }) => {
   try {
     const response = await apiClient.put<ApiResponse<User>>("/user/me", data);
 
