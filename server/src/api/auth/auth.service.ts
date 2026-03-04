@@ -85,6 +85,18 @@ export class AuthService {
       },
     });
 
+    await this.prisma.organization.create({
+      data: {
+        name: `${name}'s Organization`,
+        ownerId: user.id,
+        organizationMembers: {
+          create: {
+            userId: user.id,
+          },
+        },
+      },
+    });
+
     const code = this.utilsService.generateRandomCode(6, { digitsOnly: true });
 
     await this.prisma.signInCodes.create({

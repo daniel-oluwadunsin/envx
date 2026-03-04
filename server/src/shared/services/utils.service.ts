@@ -12,6 +12,8 @@ export class UtilsService {
         Math.floor(Math.random() * characters.length),
       );
     }
+
+    console.log('Generated code:', result); // Log the generated code for debugging
     return result;
   }
 }

@@ -37,6 +37,7 @@ model Organization {
 
   owner               User                  @relation(fields: [ownerId], references: [id])
   organizationMembers OrganizationMembers[]
+  organizationInvites OrganizationInvite[]
 }
 
 model OrganizationMembers {
@@ -47,6 +48,16 @@ model OrganizationMembers {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   createdAt DateTime @default(now())
+}
+
+model OrganizationInvite {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  email          String
+  organizationId String       @db.ObjectId
+  token          String       @unique
+  expiresAt      DateTime
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
 }
 
 model Projects {
