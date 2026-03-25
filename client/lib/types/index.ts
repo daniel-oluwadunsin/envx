@@ -9,10 +9,18 @@ export interface User {
 export interface Organization {
   id: string;
   name: string;
-  slug: string;
-  members: number;
-  projects: number;
+  membersCount: number;
+  projectsCount: number;
   createdAt: string;
+  role: "owner" | "member";
+  ownerId: string;
+}
+
+export interface OrganizationMmebers {
+  id: string;
+  name: string;
+  email: string;
+  role: "owner" | "member";
 }
 
 export interface Project {

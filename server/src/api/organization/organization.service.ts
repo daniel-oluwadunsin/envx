@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
 import { UtilsService } from 'src/shared/services/utils.service';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventNames } from 'src/shared/enums';
 import { SendMail } from 'src/shared/mail/interfaces';
+import { User } from 'generated/prisma/client';
 
 @Injectable()
 export class OrganizationService {
@@ -36,6 +41,7 @@ export class OrganizationService {
   }
 
   async inviteMember(organizationId: string, email: string) {
+    await this.prisma.organizationInvite.deleteMany({});
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
     });
@@ -59,7 +65,7 @@ export class OrganizationService {
 
     const token = this.utilService.generateRandomCode(32);
 
-    const link = `${this.configService.get('FRONTEND_URL')}/accept-invite?token=${token}&email=${email.toLowerCase()}`;
+    const link = `${this.configService.get('FRONTEND_URL')}/accept-invite?token=${token}&email=${email.toLowerCase()}&orgId=${organizationId}`;
 
     const newInvite = await this.prisma.organizationInvite.create({
       data: {
@@ -73,9 +79,9 @@ export class OrganizationService {
     this.eventEmitter.emit(EventNames.SendMail, {
       to: email,
       subject: `You're invited to join ${organization.name} on EnvX`,
-      template: 'invite',
+      template: 'organization-invite',
       context: {
-        link,
+        inviteLink: link,
         organizationName: organization.name,
       },
     } satisfies SendMail);
@@ -87,15 +93,15 @@ export class OrganizationService {
     };
   }
 
-  async acceptInvite(token: string, email: string) {
+  async acceptInvite(organizationId: string, authUser: User, token: string) {
     const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: authUser.email.toLowerCase() },
     });
 
     const invite = await this.prisma.organizationInvite.findFirst({
       where: {
+        organizationId,
         token,
-        email: email.toLowerCase(),
         expiresAt: {
           gt: new Date(),
         },
@@ -103,6 +109,11 @@ export class OrganizationService {
     });
 
     if (!invite) throw new NotFoundException('Invite not found or expired');
+    if (invite.email.toLowerCase() !== user?.email.toLowerCase()) {
+      throw new BadRequestException(
+        'This invite is not for your email address',
+      );
+    }
 
     await this.prisma.organizationMembers.create({
       data: {
@@ -123,6 +134,12 @@ export class OrganizationService {
   }
 
   async getOrganizationMembers(organizationId: string) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!organization) throw new NotFoundException('Organization not found');
+
     const members = await this.prisma.organizationMembers.findMany({
       where: { organizationId },
       include: {
@@ -139,7 +156,10 @@ export class OrganizationService {
     return {
       success: true,
       message: 'Organization members retrieved successfully',
-      data: members.map((member) => member.user),
+      data: members.map((member) => ({
+        ...member.user,
+        role: organization.ownerId === member.userId ? 'owner' : 'member',
+      })),
     };
   }
 
@@ -169,6 +189,33 @@ export class OrganizationService {
     };
   }
 
+  async getPublicOrganization(organizationId: string) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        id: true,
+        name: true,
+        organizationMembers: true,
+        projects: true,
+      },
+    });
+
+    if (!organization) throw new NotFoundException('Organization not found');
+
+    const data = {
+      id: organization.id,
+      name: organization.name,
+      membersCount: organization.organizationMembers.length,
+      projectsCount: organization.projects.length,
+    };
+
+    return {
+      success: true,
+      message: 'Organization retrieved successfully',
+      data,
+    };
+  }
+
   async deleteOrganization(organizationId: string) {
     await this.prisma.organization.delete({
       where: { id: organizationId },
@@ -193,7 +240,22 @@ export class OrganizationService {
     };
   }
 
-  async removeMember(organizationId: string, userId: string) {
+  async removeMember(
+    organizationId: string,
+    userId: string,
+    loggedInUserId: string,
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!org) throw new NotFoundException('Organization not found');
+
+    if (org.ownerId !== loggedInUserId)
+      throw new BadRequestException(
+        'Only organization owner can remove members',
+      );
+
     const member = await this.prisma.organizationMembers.findFirst({
       where: {
         organizationId,
@@ -218,14 +280,25 @@ export class OrganizationService {
   async getOrganizations(userId: string) {
     const memberships = await this.prisma.organizationMembers.findMany({
       where: { userId },
+      orderBy: {
+        organization: {
+          createdAt: 'desc',
+        },
+      },
       include: {
-        organization: true,
+        organization: {
+          include: {
+            _count: { select: { organizationMembers: true, projects: true } },
+          },
+        },
       },
     });
 
     const data = memberships.map((m) => ({
       ...m.organization,
       role: m.organization.ownerId === userId ? 'owner' : 'member',
+      membersCount: m.organization._count.organizationMembers,
+      projectsCount: m.organization._count.projects,
     }));
 
     return {

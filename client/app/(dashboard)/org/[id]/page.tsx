@@ -49,23 +49,76 @@ import {
   Users,
   Building2,
 } from "lucide-react";
-import { organizations, teamMembers } from "@/lib/data/mock-data";
 import { toast } from "sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  getOrganization,
+  getOrganizationMembers,
+  inviteMember,
+  removeMember,
+} from "@/lib/services/org.service";
+import Loader from "@/components/ui/loader";
+import { useUserInfo } from "@/lib/hooks/use-user-info";
+import { queryClient } from "@/lib/providers/app-provider";
 
 export default function OrgDetailsPage() {
-  const params = useParams();
-  const router = useRouter();
-  const orgId = params.id as string;
-
-  const org = organizations.find((o) => o.id === orgId);
   const [inviteEmail, setInviteEmail] = useState("");
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
+  const { user } = useUserInfo();
+  const params = useParams();
+  const orgId = params.id as string;
+
+  const { data: org, isLoading } = useQuery({
+    queryKey: ["organization", orgId],
+    queryFn: () => getOrganization(orgId),
+  });
+  const { data: members, isLoading: membersLoading } = useQuery({
+    queryKey: ["organization", orgId, "members"],
+    queryFn: () => getOrganizationMembers(orgId),
+  });
+
+  const { mutateAsync: _inviteMember, isPending: _invitingMember } =
+    useMutation({
+      mutationKey: ["inviteMember", orgId],
+      mutationFn: (email: string) => inviteMember(orgId, email),
+      onSuccess: () => {
+        toast.success(`Invitation sent to ${inviteEmail}`);
+        setInviteEmail("");
+      },
+      onError(error) {
+        setInviteEmail("");
+      },
+    });
+
+  const { mutateAsync: _deleteMember, isPending: _deletingMember } =
+    useMutation({
+      mutationKey: ["deleteMember", orgId, memberToDelete],
+      mutationFn: (memberId: string) => removeMember(orgId, memberId),
+      onSuccess: (_, memberId) => {
+        const member = members?.find((m) => m.id === memberId);
+        if (member) {
+          toast.success(
+            `${member.name} has been removed from the organization`,
+          );
+          setMemberToDelete(null);
+        }
+
+        queryClient.removeQueries({
+          predicate: ({ queryKey }) =>
+            queryKey.join() === ["organization", orgId, "members"].join(),
+        });
+      },
+    });
+
+  if (isLoading) {
+    return <Loader />;
+  }
 
   if (!org) {
     return (
       <div className="p-6">
         <div className="flex items-center gap-2 mb-6">
-          <Link href="/dashboard/org">
+          <Link href="/org">
             <Button variant="ghost" size="sm">
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back
@@ -82,16 +135,11 @@ export default function OrgDetailsPage() {
       toast.error("Email is required");
       return;
     }
-    toast.success(`Invitation sent to ${inviteEmail}`);
-    setInviteEmail("");
+    _inviteMember(inviteEmail);
   };
 
   const handleDeleteMember = (memberId: string) => {
-    const member = teamMembers.find((m) => m.id === memberId);
-    if (member) {
-      toast.success(`${member.name} has been removed from the organization`);
-      setMemberToDelete(null);
-    }
+    _deleteMember(memberId);
   };
 
   const getInitials = (name: string) => {
@@ -106,7 +154,7 @@ export default function OrgDetailsPage() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-8 flex items-center gap-4">
-        <Link href="/dashboard/org">
+        <Link href="/org">
           <Button variant="ghost" size="sm">
             <ChevronLeft className="mr-2 h-4 w-4" />
             Back
@@ -118,7 +166,6 @@ export default function OrgDetailsPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{org.name}</h1>
-            <p className="text-sm text-muted-foreground">{org.slug}</p>
           </div>
         </div>
       </div>
@@ -146,7 +193,7 @@ export default function OrgDetailsPage() {
               <p className="text-xs font-medium text-muted-foreground">
                 Team Members
               </p>
-              <p className="text-sm mt-1">{org.members}</p>
+              <p className="text-sm mt-1">{org.membersCount}</p>
             </div>
           </div>
         </CardContent>
@@ -192,9 +239,13 @@ export default function OrgDetailsPage() {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
+                  <Button variant="outline" disabled={_invitingMember}>
+                    Cancel
+                  </Button>
                 </DialogClose>
-                <Button onClick={handleInvite}>Send Invite</Button>
+                <Button onClick={handleInvite} loading={_invitingMember}>
+                  Send Invite
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -211,7 +262,7 @@ export default function OrgDetailsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {teamMembers.map((member) => (
+                {members?.map((member) => (
                   <TableRow key={member.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -221,6 +272,11 @@ export default function OrgDetailsPage() {
                           </AvatarFallback>
                         </Avatar>
                         <span className="font-medium">{member.name}</span>
+                        {member.id === user?.id && (
+                          <Badge variant="destructive" className="text-xs">
+                            You
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -229,9 +285,9 @@ export default function OrgDetailsPage() {
                     <TableCell>
                       <Badge
                         variant={
-                          member.role === "owner"
+                          member.role == "member"
                             ? "default"
-                            : member.role === "admin"
+                            : member.role === "owner"
                               ? "secondary"
                               : "outline"
                         }
@@ -241,7 +297,7 @@ export default function OrgDetailsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {member.role !== "owner" && (
+                      {member.role !== "owner" && org.ownerId === user?.id && (
                         <AlertDialog open={memberToDelete === member.id}>
                           <button
                             onClick={() => setMemberToDelete(member.id)}
@@ -258,13 +314,13 @@ export default function OrgDetailsPage() {
                                 {`Are you sure you want to remove ${member.name} from ${org.name}? This action cannot be undone.`}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <AlertDialogCancel onClick={() => setMemberToDelete(null)}>
+                            <AlertDialogCancel
+                              onClick={() => setMemberToDelete(null)}
+                            >
                               Cancel
                             </AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() =>
-                                handleDeleteMember(member.id)
-                              }
+                              onClick={() => handleDeleteMember(member.id)}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
                               Remove

@@ -36,9 +36,13 @@ model Organization {
   gitlabToken String?
   ownerId     String  @db.ObjectId
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   owner               User                  @relation(fields: [ownerId], references: [id])
   organizationMembers OrganizationMembers[]
   organizationInvites OrganizationInvite[]
+  projects            Projects[]
 }
 
 model OrganizationMembers {
@@ -47,6 +51,9 @@ model OrganizationMembers {
   organizationId String       @db.ObjectId
   user           User         @relation(fields: [userId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
+  githubToken    String?
+  gitlabToken    String?
+  bitBucketToken String?
 
   createdAt DateTime @default(now())
 }
@@ -68,6 +75,8 @@ model Projects {
   updatedAt           DateTime            @updatedAt
   projectKey          String              @unique
   userProjectAccesses UserProjectAccess[]
+  organizationId      String              @db.ObjectId
+  organization        Organization        @relation(fields: [organizationId], references: [id])
 }
 
 model UserProjectAccess {

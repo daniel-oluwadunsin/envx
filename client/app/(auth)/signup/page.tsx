@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,8 @@ type Inputs = {
 export default function SignUpPage() {
   const router = useRouter();
   const { handleSubmit, control, watch } = useForm<Inputs>();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect");
 
   const email = watch("email");
 
@@ -32,12 +34,27 @@ export default function SignUpPage() {
         description:
           "Your account has been created successfully. Check your email for the login code.",
       });
-      router.push(`/passwordless?email=${email}`);
+      router.push(getPasswordlessLink(email));
     },
   });
 
   const onSubmit = (data: Inputs) => {
     mutateAsync(data);
+  };
+
+  const signInLink = useMemo(() => {
+    if (redirect) {
+      return `/signin?redirect=${encodeURIComponent(redirect as string)}`;
+    }
+    return "/signin";
+  }, [redirect]);
+
+  const getPasswordlessLink = (email: string) => {
+    if (redirect) {
+      return `/passwordless?email=${email}&redirect=${encodeURIComponent(redirect as string)}`;
+    } else {
+      return `/passwordless?email=${email}`;
+    }
   };
 
   return (
@@ -134,7 +151,7 @@ export default function SignUpPage() {
 
         <p className="text-white text-sm text-center mt-4">
           Already have an account?{" "}
-          <Link href="/signin" className="underline hover:text-foreground">
+          <Link href={signInLink} className="underline hover:text-foreground">
             Sign in
           </Link>
         </p>

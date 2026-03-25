@@ -111,7 +111,7 @@ export class AuthService {
     this.eventEmitter.emit(EventNames.SendMail, {
       to: user.email,
       subject: 'Your Sign-In Code',
-      template: 'sign-in-code',
+      template: 'passwordless-signin',
       context: {
         code,
         email: user.email,

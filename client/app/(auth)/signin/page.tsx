@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import {
+  redirect,
+  useParams,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,17 +20,8 @@ import { toast } from "sonner";
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-
-  const { mutateAsync: signInMutateAsync, isPending: loading } = useMutation({
-    mutationKey: ["signIn"],
-    mutationFn: () => signIn(email),
-    onSuccess() {
-      toast.success("Email sent", {
-        description: "A sign-in code has been sent to your email address.",
-      });
-      router.push(`/passwordless?email=${email}`);
-    },
-  });
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect");
 
   const onEmailChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setEmail(e.target.value);
@@ -39,6 +35,32 @@ export default function SignInPage() {
     }
     signInMutateAsync();
   };
+
+  const signUpLink = useMemo(() => {
+    if (redirect) {
+      return `/signup?redirect=${encodeURIComponent(redirect as string)}`;
+    }
+    return "/signup";
+  }, [redirect]);
+
+  const getPasswordlessLink = (email: string) => {
+    if (redirect) {
+      return `/passwordless?email=${email}&redirect=${encodeURIComponent(redirect as string)}`;
+    } else {
+      return `/passwordless?email=${email}`;
+    }
+  };
+
+  const { mutateAsync: signInMutateAsync, isPending: loading } = useMutation({
+    mutationKey: ["signIn"],
+    mutationFn: () => signIn(email),
+    onSuccess() {
+      toast.success("Email sent", {
+        description: "A sign-in code has been sent to your email address.",
+      });
+      router.push(getPasswordlessLink(email));
+    },
+  });
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -84,7 +106,7 @@ export default function SignInPage() {
 
         <p className="text-white text-sm text-center mt-4">
           Do not have an account?{" "}
-          <Link href="/signup" className="underline hover:text-foreground">
+          <Link href={signUpLink} className="underline hover:text-foreground">
             Sign up
           </Link>
         </p>

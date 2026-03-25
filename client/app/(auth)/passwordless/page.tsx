@@ -16,6 +16,7 @@ const PasswordlessPage = () => {
   const [code, setCode] = useState("");
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
+  const redirectUrl = searchParams.get("redirect");
   const { setAccessToken } = useUserStore();
 
   const { mutateAsync: _signInWithCode, isPending: loading } = useMutation({
@@ -26,7 +27,12 @@ const PasswordlessPage = () => {
       toast.success("Sign-in successful", {
         description: "You have successfully signed in to EnvX.",
       });
-      redirect("/dashboard");
+
+      if (!redirectUrl) {
+        redirect("/dashboard");
+      } else {
+        redirect(decodeURIComponent(redirectUrl));
+      }
     },
   });
 

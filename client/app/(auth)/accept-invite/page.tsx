@@ -1,52 +1,76 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EnvXLogo } from "@/components/envx-logo";
 import { Badge } from "@/components/ui/badge";
 import { Building2, CheckCircle } from "lucide-react";
-import { organizations } from "@/lib/data/mock-data";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import {
+  acceptInvite,
+  getPublicOrganization,
+} from "@/lib/services/org.service";
+import PulseLogo from "@/components/pulse-logo";
+import { useUserInfo } from "@/lib/hooks/use-user-info";
+import { errorHandler } from "@/lib/utils";
 
 export default function InvitePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const orgId = searchParams.get("org");
+  const orgId = searchParams.get("orgId");
   const inviteToken = searchParams.get("token");
 
   const [isAccepting, setIsAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
 
-  const org = organizations.find((o) => o.id === orgId);
+  const { data: org, isLoading: isOrgLoading } = useQuery({
+    queryKey: ["publicOrganization", orgId],
+    queryFn: () => getPublicOrganization(orgId!),
+    enabled: !!orgId,
+  });
+
+  const { user, isLoadingUser } = useUserInfo();
+
+  const signInWithRedirectUrl = useMemo(
+    () =>
+      `/signin?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+    [],
+  );
 
   const handleAccept = async () => {
-    setIsAccepting(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsAccepting(false);
-    setAccepted(true);
-    toast.success("Invitation accepted!", {
-      description: "You've been added to the organization.",
-    });
-    // Redirect after a brief moment
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 2000);
+    try {
+      setIsAccepting(true);
+
+      await acceptInvite(orgId!, inviteToken!);
+
+      setAccepted(true);
+      toast.success("Invitation accepted!", {
+        description: "You've been added to the organization.",
+      });
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 2000);
+    } catch (error) {
+      errorHandler(error);
+    } finally {
+      setIsAccepting(false);
+    }
   };
 
-  const handleDecline = () => {
-    toast.info("Invitation declined");
-    router.push("/dashboard");
-  };
+  if (isOrgLoading || isLoadingUser) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <PulseLogo />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return router.replace(signInWithRedirectUrl);
+  }
 
   if (!org || !inviteToken) {
     return (
@@ -90,7 +114,10 @@ export default function InvitePage() {
                   You're now a member of this organization
                 </p>
               </div>
-              <Button className="w-full" onClick={() => router.push("/dashboard")}>
+              <Button
+                className="w-full"
+                onClick={() => router.push("/dashboard")}
+              >
                 Go to Dashboard
               </Button>
             </div>
@@ -103,13 +130,10 @@ export default function InvitePage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold">{org.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {org.slug}
-                    </p>
                     <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
-                      <span>{org.members} members</span>
+                      <span>{org.membersCount} members</span>
                       <span className="text-border">•</span>
-                      <span>{org.projects} projects</span>
+                      <span>{org.projectsCount} projects</span>
                     </div>
                   </div>
                 </div>
@@ -144,25 +168,25 @@ export default function InvitePage() {
                 >
                   Accept Invitation
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleDecline}
-                  disabled={isAccepting}
-                >
-                  Decline
-                </Button>
               </div>
 
               <p className="text-center text-xs text-muted-foreground">
-                By accepting, you agree to the organization's terms and
-                policies
+                By accepting, you agree to the organization's terms and policies
               </p>
             </div>
           )}
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
+          <Link
+            href={signInWithRedirectUrl}
+            className="hover:underline hover:text-foreground"
+          >
+            Sign in with another account
+          </Link>
+        </p>
+
+        <p className="mt-2 text-center text-xs text-muted-foreground">
           Need help?{" "}
           <Link href="#" className="underline hover:text-foreground">
             Contact support
