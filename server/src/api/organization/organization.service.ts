@@ -10,6 +10,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventNames } from 'src/shared/enums';
 import { SendMail } from 'src/shared/mail/interfaces';
 import { User } from 'generated/prisma/client';
+import {
+  DeleteUserProjectAccess,
+  PopulateProjectAccess,
+} from '../project/interfaces';
 
 @Injectable()
 export class OrganizationService {
@@ -126,6 +130,19 @@ export class OrganizationService {
       where: { id: invite.id },
     });
 
+    // give access to all projects
+    const projects = await this.prisma.projects.findMany({
+      where: { organizationId },
+      select: { id: true },
+    });
+
+    projects.forEach((project) => {
+      this.eventEmitter.emit(EventNames.PopulateProjectAccess, {
+        projectId: project.id,
+        usersIds: [user.id],
+      } satisfies PopulateProjectAccess);
+    });
+
     return {
       success: true,
       message: 'Invite accepted successfully',
@@ -217,6 +234,22 @@ export class OrganizationService {
   }
 
   async deleteOrganization(organizationId: string) {
+    await this.prisma.userProjectAccess.deleteMany({
+      where: {
+        project: {
+          organizationId: organizationId,
+        },
+      },
+    });
+
+    await this.prisma.projects.deleteMany({
+      where: { organizationId },
+    });
+
+    await this.prisma.organizationMembers.deleteMany({
+      where: { organizationId },
+    });
+
     await this.prisma.organization.delete({
       where: { id: organizationId },
     });
@@ -268,6 +301,18 @@ export class OrganizationService {
 
     await this.prisma.organizationMembers.delete({
       where: { id: member.id },
+    });
+
+    const projects = await this.prisma.projects.findMany({
+      where: { organizationId },
+      select: { id: true },
+    });
+
+    projects.forEach((project) => {
+      this.eventEmitter.emit(EventNames.DeleteUserProjectAccess, {
+        projectId: project.id,
+        userId,
+      } satisfies DeleteUserProjectAccess);
     });
 
     return {

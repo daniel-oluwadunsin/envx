@@ -11,6 +11,7 @@ import { EventNames } from 'src/shared/enums';
 import { SendMail } from 'src/shared/mail/interfaces';
 import { SignUpDto } from './dtos';
 import { JwtService } from '@nestjs/jwt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +21,25 @@ export class AuthService {
     private readonly utilsService: UtilsService,
     private readonly jwtService: JwtService,
   ) {}
+
+  private async generateUserKey(): Promise<string> {
+    let key: string;
+    let exists = true;
+
+    while (exists) {
+      key = crypto.randomBytes(32).toString('hex');
+
+      const existingUser = await this.prisma.user.findFirst({
+        where: { encryptionKey: key },
+      });
+
+      if (!existingUser) {
+        exists = false;
+      }
+    }
+
+    return key;
+  }
 
   async generateToken(userId: string) {
     const payload = { sub: userId };
@@ -78,10 +98,13 @@ export class AuthService {
       throw new BadRequestException('User with this email already exists');
     }
 
+    const userKey = await this.generateUserKey();
+
     const user = await this.prisma.user.create({
       data: {
         email: email.toLowerCase(),
         name,
+        encryptionKey: userKey,
       },
     });
 
