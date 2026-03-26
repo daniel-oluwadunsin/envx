@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrgProjectStore } from "@/lib/store/org-projects.store";
 import { getUserOrganizations } from "@/lib/services/org.service";
+import { getProjects } from "@/lib/services/projects.service";
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
@@ -43,6 +44,8 @@ export function Topbar() {
     selectedProject,
     setSelectedOrg,
     setSelectedProject,
+    projects,
+    setProjects,
   } = useOrgProjectStore();
   const { user } = useUserInfo();
   const { clearUser } = useUserStore();
@@ -66,6 +69,12 @@ export function Topbar() {
     initialData: organizations,
   });
 
+  const { data: queryProjects, isLoading: loadingProjects } = useQuery({
+    queryKey: ["projects", selectedOrg?.id],
+    queryFn: () => getProjects(selectedOrg!.id),
+    enabled: !!selectedOrg,
+  });
+
   useEffect(() => {
     if (queryOrgs) {
       setOrganizations(queryOrgs);
@@ -74,6 +83,15 @@ export function Topbar() {
       }
     }
   }, [queryOrgs]);
+
+  useEffect(() => {
+    if (queryProjects) {
+      setProjects(queryProjects);
+      if (!selectedProject) {
+        setSelectedProject(queryProjects[0]);
+      }
+    }
+  }, [queryProjects]);
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-background px-6">
@@ -124,13 +142,11 @@ export function Topbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
                 {projects.map((prj) => (
-                  <DropdownMenuItem key={prj.id}>
-                    <Link
-                      href={`/project/${prj.id}/environments`}
-                      className="w-full"
-                    >
-                      {prj.name}
-                    </Link>
+                  <DropdownMenuItem
+                    onSelect={() => setSelectedProject(prj)}
+                    key={prj.id}
+                  >
+                    {prj.name}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>

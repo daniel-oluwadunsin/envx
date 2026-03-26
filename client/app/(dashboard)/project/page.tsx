@@ -38,19 +38,76 @@ import {
   Settings,
   FolderKanban,
 } from "lucide-react";
-import { projects, organizations } from "@/lib/data/mock-data";
+import { projects } from "@/lib/data/mock-data";
 import { toast } from "sonner";
+import { Organization } from "@/lib/types";
+import { Controller, useForm } from "react-hook-form";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { getUserOrganizations } from "@/lib/services/org.service";
+import { Textarea } from "@/components/ui/textarea";
+import { createProject, getProjects } from "@/lib/services/projects.service";
+import { queryClient } from "@/lib/providers/app-provider";
+import { useRouter } from "next/navigation";
+import { set } from "date-fns";
+import Loader from "@/components/ui/loader";
+
+type CreateProjectInput = {
+  name: string;
+  organization: Organization;
+  description?: string;
+};
 
 export default function ProjectsPage() {
-  const [projectName, setProjectName] = useState("");
-  const [selectedOrg, setSelectedOrg] = useState("");
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const { control, handleSubmit, watch, setValue } =
+    useForm<CreateProjectInput>();
+  const selectedOrg = watch("organization");
+  const router = useRouter();
 
-  const handleCreate = () => {
-    if (!projectName.trim()) return;
-    toast.success(`Project "${projectName}" created`);
-    setProjectName("");
-    setSelectedOrg("");
+  const onSelectOrg = (orgId: string) => {
+    setValue("organization", organizations?.find((org) => org.id === orgId)!);
   };
+
+  const handleCreate = (input: CreateProjectInput) => {
+    if (_creatingProject) return;
+
+    if (!selectedOrg) {
+      toast.error("Please select an organization");
+      return;
+    }
+
+    _createProject({
+      name: input.name,
+      description: input.description,
+      organizationId: input.organization.id,
+    });
+  };
+
+  const { data: organizations, isLoading: loadingOrgs } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: getUserOrganizations,
+  });
+
+  const { mutateAsync: _createProject, isPending: _creatingProject } =
+    useMutation({
+      mutationFn: createProject,
+      mutationKey: ["create-project"],
+      onSuccess(data) {
+        toast.success("Project created successfully");
+        setIsCreateOpen(false);
+        queryClient.refetchQueries({
+          predicate({ queryKey }) {
+            return queryKey.includes("projects");
+          },
+        });
+        router.push(`/project/${data?.id}/environments`);
+      },
+    });
+
+  const { data: projects, isLoading: loadingProjects } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => getProjects(),
+  });
 
   return (
     <div className="p-6">
@@ -61,7 +118,7 @@ export default function ProjectsPage() {
             Manage your projects and their environment configurations.
           </p>
         </div>
-        <Dialog>
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
               <Plus className="mr-2 h-4 w-4" />
@@ -75,21 +132,77 @@ export default function ProjectsPage() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="project-name">Project name</Label>
-                <Input
-                  id="project-name"
-                  placeholder="My Project"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
+                <Controller
+                  name="name"
+                  control={control}
+                  rules={{
+                    required: {
+                      value: true,
+                      message: "This field is required",
+                    },
+                  }}
+                  render={({
+                    field: { value, onBlur, onChange },
+                    fieldState: { error },
+                  }) => {
+                    return (
+                      <Input
+                        id="project-name"
+                        placeholder="My Project"
+                        helperText={error?.message}
+                        value={value}
+                        onBlur={onBlur}
+                        onChange={onChange}
+                      />
+                    );
+                  }}
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="project-description">Project description</Label>
+                <Controller
+                  name="description"
+                  control={control}
+                  render={({
+                    field: { value, onBlur, onChange },
+                    fieldState: { error },
+                  }) => {
+                    return (
+                      <Textarea
+                        className="!min-h-40"
+                        id="project-description"
+                        placeholder="My Project is a great project that..."
+                        helperText={error?.message}
+                        value={value}
+                        onBlur={onBlur}
+                        onChange={onChange}
+                      />
+                    );
+                  }}
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label>Organization</Label>
-                <Select value={selectedOrg} onValueChange={setSelectedOrg}>
+                <Select
+                  disabled={loadingOrgs || !organizations?.length}
+                  value={loadingOrgs ? "loading" : selectedOrg?.id}
+                  onValueChange={onSelectOrg}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select an organization" />
+                    <SelectValue
+                      placeholder={
+                        loadingOrgs
+                          ? "Loading..."
+                          : !organizations?.length
+                            ? "No organizations available"
+                            : "Select an organization"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {organizations.map((org) => (
+                    {organizations?.map((org) => (
                       <SelectItem key={org.id} value={org.id}>
                         {org.name}
                       </SelectItem>
@@ -103,28 +216,35 @@ export default function ProjectsPage() {
                 <Button variant="outline">Cancel</Button>
               </DialogClose>
               <DialogClose asChild>
-                <Button onClick={handleCreate}>Create</Button>
+                <Button
+                  onClick={handleSubmit(handleCreate)}
+                  loading={_creatingProject}
+                >
+                  Create
+                </Button>
               </DialogClose>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {projects.length === 0 ? (
+      {loadingProjects ? (
+        <Loader />
+      ) : projects?.length === 0 || !projects ? (
         <Card className="flex flex-col items-center justify-center py-16">
           <FolderKanban className="mb-4 h-10 w-10 text-muted-foreground" />
           <h3 className="mb-1 text-lg font-semibold">No projects yet</h3>
           <p className="mb-4 text-sm text-muted-foreground">
             Create your first project to get started.
           </p>
-          <Button size="sm">
+          <Button onClick={() => setIsCreateOpen(true)} size="sm">
             <Plus className="mr-2 h-4 w-4" />
             Create Project
           </Button>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+          {projects?.map((project) => (
             <Link key={project.id} href={`/project/${project.id}/environments`}>
               <Card className="group cursor-pointer transition-colors hover:border-foreground/10">
                 <CardHeader className="flex flex-row items-start justify-between">

@@ -26,7 +26,6 @@ export interface OrganizationMmebers {
 export interface Project {
   id: string;
   name: string;
-  slug: string;
   orgId: string;
   orgName: string;
   environments: number;

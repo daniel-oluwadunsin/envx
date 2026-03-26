@@ -40,7 +40,7 @@ export class ProjectService {
   }
 
   async createProject(userId: string, body: CreateProjectDto) {
-    const { name, organizationId } = body;
+    const { name, organizationId, description } = body;
 
     const hasOrgAccess = await this.prisma.organizationMembers.findFirst({
       where: {
@@ -63,6 +63,7 @@ export class ProjectService {
         createdBy: { connect: { id: userId } },
         name,
         projectKey,
+        description,
       },
       select: {
         id: true,
@@ -103,13 +104,25 @@ export class ProjectService {
           },
         },
       },
+      include: {
+        organization: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
+
+    const data = projects.map((project) => ({
+      id: project.id,
+      name: project.name,
+      orgId: project.organizationId,
+      orgName: project.organization.name,
+      lastUpdated: project.updatedAt,
+      description: project.description,
+    }));
 
     return {
       success: true,
       message: 'Projects retrieved successfully',
-      data: projects,
+      data,
     };
   }
 
@@ -162,6 +175,7 @@ export class ProjectService {
 
           return true;
         } catch (error) {
+          console.log(error);
           this.logger.error(
             `Failed to populate project access for user ${user.id} and project ${projectId}: ${error.message}`,
           );

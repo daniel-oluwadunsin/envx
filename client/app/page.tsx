@@ -1,3 +1,4 @@
+"use client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { EnvXLogo } from "@/components/envx-logo";
@@ -12,6 +13,7 @@ import {
   ArrowRight,
   ChevronRight,
 } from "lucide-react";
+import { useUserInfo } from "@/lib/hooks/use-user-info";
 
 const features = [
   {
@@ -68,6 +70,8 @@ const devFeatures = [
 ];
 
 export default function LandingPage() {
+  const { user, isLoadingUser } = useUserInfo();
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Navigation */}
@@ -87,17 +91,30 @@ export default function LandingPage() {
             >
               Developers
             </Link>
-            <Link href="/signin">
-              <Button variant="ghost" size="sm">
-                Sign In
-              </Button>
-            </Link>
-            <Link href="/signup">
-              <Button size="sm">
-                Get Started
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Button>
-            </Link>
+
+            {isLoadingUser ? (
+              <div className="h-5 w-24 animate-pulse rounded bg-muted" />
+            ) : user ? (
+              <>
+                <Link href="/dashboard">
+                  <Button size="sm">Dashboard</Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/signin">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button size="sm">
+                    Get Started
+                    <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </nav>
       </header>

@@ -8,4 +8,7 @@ export class CreateProjectDto {
   @IsString(false)
   @IsMongoId()
   organizationId: string;
+
+  @IsString(false)
+  description?: string;
 }

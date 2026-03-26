@@ -8,3 +8,9 @@ export type SignUpDto = {
   name: string;
   email: string;
 };
+
+export type CreateProjectDto = {
+  name: string;
+  organizationId: string;
+  description?: string;
+};
