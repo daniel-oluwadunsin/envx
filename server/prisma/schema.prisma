@@ -96,12 +96,14 @@ model UserProjectAccess {
 }
 
 model Session {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId       String   @db.ObjectId
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String  @db.ObjectId
   accessToken  String
   refreshToken String?
   deviceId     String?
-  expiresAt    DateTime
+  cliCode      String?
+
+  expiresAt DateTime
 }
 
 model SignInCodes {
@@ -111,6 +113,23 @@ model SignInCodes {
   userId    String?  @db.ObjectId
   user      User?    @relation(fields: [userId], references: [id])
   expiresAt DateTime
+  cliCode   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CliSignInCode {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  deviceCode String
+
+  expiresAt DateTime
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  status    CliSignInStatus @default(Pending)
+  email     String?
+
+  @@index([deviceCode])
 }
 
 enum UserRoles {
@@ -120,4 +139,10 @@ enum UserRoles {
 enum UserProjectRoles {
   Owner
   Member
+}
+
+enum CliSignInStatus {
+  Pending
+  Completed
+  Expired
 }

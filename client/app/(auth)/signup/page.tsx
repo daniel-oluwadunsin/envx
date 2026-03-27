@@ -23,6 +23,7 @@ export default function SignUpPage() {
   const { handleSubmit, control, watch } = useForm<Inputs>();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
+  const cliCode = searchParams.get("cliCode");
 
   const email = watch("email");
 
@@ -43,15 +44,24 @@ export default function SignUpPage() {
   };
 
   const signInLink = useMemo(() => {
+    let link = "/signin?";
+
     if (redirect) {
-      return `/signin?redirect=${encodeURIComponent(redirect as string)}`;
+      link += `redirect=${encodeURIComponent(redirect as string)}&`;
     }
-    return "/signin";
-  }, [redirect]);
+
+    if (cliCode) {
+      link += `cliCode=${cliCode}`;
+    }
+
+    return link;
+  }, [redirect, cliCode]);
 
   const getPasswordlessLink = (email: string) => {
     if (redirect) {
       return `/passwordless?email=${email}&redirect=${encodeURIComponent(redirect as string)}`;
+    } else if (cliCode) {
+      return `/passwordless?email=${email}&cli=true&cliCode=${cliCode}`;
     } else {
       return `/passwordless?email=${email}`;
     }

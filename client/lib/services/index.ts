@@ -16,15 +16,21 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+const authRoutes = ["/dashboard", "/org", "project"];
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      useUserStore.getState().clearUser();
-      toast.error("Unauthorized", {
-        description: "Your session has expired. Please sign in again.",
-      });
-      window.location.href = "/signin";
+      if (
+        authRoutes.some((route) => window.location.pathname.startsWith(route))
+      ) {
+        useUserStore.getState().clearUser();
+        toast.error("Unauthorized", {
+          description: "Your session has expired. Please sign in again.",
+        });
+        window.location.href = "/signin";
+      }
     }
 
     return Promise.reject(error);

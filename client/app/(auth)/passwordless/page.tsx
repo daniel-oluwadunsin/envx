@@ -17,6 +17,7 @@ const PasswordlessPage = () => {
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
   const redirectUrl = searchParams.get("redirect");
+  const isCli = searchParams.get("cli") === "true";
   const { setAccessToken } = useUserStore();
 
   const { mutateAsync: _signInWithCode, isPending: loading } = useMutation({
@@ -28,10 +29,12 @@ const PasswordlessPage = () => {
         description: "You have successfully signed in to EnvX.",
       });
 
-      if (!redirectUrl) {
+      if (!redirectUrl && !isCli) {
         redirect("/dashboard");
-      } else {
+      } else if (redirectUrl) {
         redirect(decodeURIComponent(redirectUrl));
+      } else if (isCli) {
+        redirect(`/cli?status=success&canGoToDashboard=true`);
       }
     },
   });

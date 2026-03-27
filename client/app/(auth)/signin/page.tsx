@@ -22,6 +22,7 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
+  const cliCode = searchParams.get("cliCode");
 
   const onEmailChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setEmail(e.target.value);
@@ -37,15 +38,24 @@ export default function SignInPage() {
   };
 
   const signUpLink = useMemo(() => {
+    let link = "/signup?";
+
     if (redirect) {
-      return `/signup?redirect=${encodeURIComponent(redirect as string)}`;
+      link += `redirect=${encodeURIComponent(redirect as string)}&`;
     }
-    return "/signup";
-  }, [redirect]);
+
+    if (cliCode) {
+      link += `cliCode=${cliCode}`;
+    }
+
+    return link;
+  }, [redirect, cliCode]);
 
   const getPasswordlessLink = (email: string) => {
     if (redirect) {
       return `/passwordless?email=${email}&redirect=${encodeURIComponent(redirect as string)}`;
+    } else if (cliCode) {
+      return `/passwordless?email=${email}&cli=true&cliCode=${cliCode}`;
     } else {
       return `/passwordless?email=${email}`;
     }

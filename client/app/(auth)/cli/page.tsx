@@ -1,35 +1,75 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { EnvXLogo } from "@/components/envx-logo"
-import { CheckCircle2, XCircle, Terminal, Loader2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { EnvXLogo } from "@/components/envx-logo";
+import { CheckCircle2, XCircle, Terminal, Loader2 } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { authorizeCli } from "@/lib/services/auth.service";
+import { useUserInfo } from "@/lib/hooks/use-user-info";
+import PulseLogo from "@/components/pulse-logo";
 
-type CLIState = "idle" | "loading" | "success" | "error"
+type CLIState = "idle" | "loading" | "success" | "error";
 
 export default function CLIAuthPage() {
-  const [code, setCode] = useState("")
-  const [state, setState] = useState<CLIState>("idle")
+  const router = useRouter();
+  const [code, setCode] = useState("");
+  const [state, setState] = useState<CLIState>("idle");
+  const searchParams = useSearchParams();
+  const codeParams = useMemo(() => searchParams.get("code"), [searchParams]);
+  const canGoToDashboard = useMemo(
+    () => searchParams.get("canGoToDashboard") === "true",
+    [searchParams],
+  );
+  const status = useMemo(() => searchParams.get("status"), [searchParams]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!code.trim()) return
+  const { user, isLoadingUser } = useUserInfo();
 
-    setState("loading")
-    await new Promise((r) => setTimeout(r, 1500))
+  const handleSubmit = async () => {
+    try {
+      if (!code.trim()) return;
 
-    if (code === "error") {
-      setState("error")
-    } else {
-      setState("success")
+      setState("loading");
+      await authorizeCli(code.trim());
+      setState("success");
+    } catch (error) {
+      setState("error");
     }
-  }
+  };
 
   const handleReset = () => {
-    setCode("")
-    setState("idle")
+    setCode("");
+    setState("idle");
+  };
+
+  useEffect(() => {
+    if (codeParams && user) {
+      setCode(codeParams);
+      handleSubmit();
+    }
+  }, [codeParams, user]);
+
+  useEffect(() => {
+    if (user) {
+      if (status === "success") {
+        setState("success");
+      }
+    }
+  }, [status, user]);
+
+  if (isLoadingUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <PulseLogo />
+      </div>
+    );
+  }
+
+  if (!user) {
+    router.replace(`/signin?cliCode=${code || codeParams}`);
+    return;
   }
 
   return (
@@ -50,6 +90,16 @@ export default function CLIAuthPage() {
                 Your CLI session has been authenticated. You can close this
                 window and return to your terminal.
               </p>
+
+              {canGoToDashboard && (
+                <Button
+                  variant="outline"
+                  className="mt-6"
+                  onClick={() => router.push("/dashboard")}
+                >
+                  Go to Dashboard
+                </Button>
+              )}
             </div>
           ) : state === "error" ? (
             <div className="flex flex-col items-center py-4 text-center">
@@ -61,23 +111,20 @@ export default function CLIAuthPage() {
                 The code you entered is invalid or has expired. Please try again
                 with a new code from your terminal.
               </p>
-              <Button
-                variant="outline"
-                className="mt-6"
-                onClick={handleReset}
-              >
+              <Button variant="outline" className="mt-6" onClick={handleReset}>
                 Try Again
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
+            <form>
               <div className="mb-6 flex flex-col items-center text-center">
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-secondary">
                   <Terminal className="h-5 w-5 text-foreground" />
                 </div>
                 <h2 className="text-lg font-semibold">Authorize CLI</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Enter the code shown in your terminal to authorize this device.
+                  Enter the code shown in your terminal to authorize this
+                  device.
                 </p>
               </div>
 
@@ -100,10 +147,11 @@ export default function CLIAuthPage() {
                   </p>
                 </div>
                 <Button
-                  type="submit"
+                  type="button"
                   className="w-full"
                   size="lg"
                   disabled={!code.trim() || state === "loading"}
+                  onClick={handleSubmit}
                 >
                   {state === "loading" ? (
                     <>
@@ -120,5 +168,5 @@ export default function CLIAuthPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -45,11 +45,14 @@ export const getUser = async () => {
 
     return response.data;
   } catch (error) {
-    errorHandler(error);
+    throw error;
   }
 };
 
-export const updateUser = async (data: { name?: string; profileImage?: string }) => {
+export const updateUser = async (data: {
+  name?: string;
+  profileImage?: string;
+}) => {
   try {
     const response = await apiClient.put<ApiResponse<User>>("/user/me", data);
 
@@ -63,6 +66,17 @@ export const logOut = async () => {
   try {
     const response = await apiClient.post("/auth/log-out");
 
+    return response.data;
+  } catch (error) {
+    errorHandler(error);
+  }
+};
+
+export const authorizeCli = async (code: string) => {
+  try {
+    const response = await apiClient.post("/auth/cli/authorize", {
+      cliCode: code,
+    });
     return response.data;
   } catch (error) {
     errorHandler(error);

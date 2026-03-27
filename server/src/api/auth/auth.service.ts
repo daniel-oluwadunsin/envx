@@ -12,6 +12,8 @@ import { SendMail } from 'src/shared/mail/interfaces';
 import { SignUpDto } from './dtos';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
+import { CliSignInStatus } from 'generated/prisma/enums';
+import { Prisma } from 'generated/prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -41,6 +43,25 @@ export class AuthService {
     return key;
   }
 
+  private async generateCliSignInCode(): Promise<string> {
+    let code: string;
+    let exists = true;
+
+    while (exists) {
+      code = this.utilsService.generateRandomCode(6, { digitsOnly: true });
+
+      const existingCode = await this.prisma.cliSignInCode.findFirst({
+        where: { deviceCode: code },
+      });
+
+      if (!existingCode) {
+        exists = false;
+      }
+    }
+
+    return code;
+  }
+
   async generateToken(userId: string) {
     const payload = { sub: userId };
     return await this.jwtService.signAsync(payload, {
@@ -50,7 +71,7 @@ export class AuthService {
     });
   }
 
-  async signIn(email: string) {
+  async signIn(email: string, cliCode?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -67,6 +88,7 @@ export class AuthService {
         userId: user.id,
         email: user?.email,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000), // Expires in 10 minutes
+        cliCode: cliCode,
       },
     });
 
@@ -88,7 +110,7 @@ export class AuthService {
   }
 
   async signUp(body: SignUpDto) {
-    const { email, name } = body;
+    const { email, name, cliCode } = body;
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -127,7 +149,8 @@ export class AuthService {
         code,
         userId: user.id,
         email: user?.email,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // Expires in 10 minutes
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        cliCode,
       },
     });
 
@@ -167,12 +190,48 @@ export class AuthService {
 
     const token = await this.generateToken(signInCode.userId);
 
+    const createData: Prisma.SessionCreateInput = {
+      userId: signInCode.userId,
+      accessToken: token,
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Expires in 1 year
+    };
+
+    if (signInCode.cliCode) {
+      const cliCode = await this.prisma.cliSignInCode.findFirst({
+        where: {
+          deviceCode: signInCode.cliCode,
+        },
+      });
+
+      if (cliCode) {
+        if (cliCode.expiresAt < new Date()) {
+          await this.prisma.cliSignInCode.update({
+            where: { id: cliCode.id },
+            data: { status: CliSignInStatus.Expired },
+          });
+        } else {
+          const cliToken = await this.generateToken(signInCode.userId);
+
+          const data = {
+            ...createData,
+            cliCode: cliCode.deviceCode,
+            accessToken: cliToken,
+          };
+
+          await this.prisma.session.create({
+            data,
+          });
+
+          await this.prisma.cliSignInCode.update({
+            where: { id: cliCode.id },
+            data: { status: CliSignInStatus.Completed },
+          });
+        }
+      }
+    }
+
     await this.prisma.session.create({
-      data: {
-        userId: signInCode.userId,
-        accessToken: token,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Expires in 1 year
-      },
+      data: createData,
     });
 
     return {
@@ -196,6 +255,148 @@ export class AuthService {
       success: true,
       message: 'Logged out successfully',
       data: null,
+    };
+  }
+
+  async initCliSignIn() {
+    const code = await this.generateCliSignInCode();
+
+    const TEN_MINUTES_FROM_NOW = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.cliSignInCode.create({
+      data: {
+        deviceCode: code,
+        expiresAt: TEN_MINUTES_FROM_NOW,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'CLI sign-in code generated',
+      data: {
+        deviceCode: code,
+        expiresAt: TEN_MINUTES_FROM_NOW,
+      },
+    };
+  }
+
+  async verifyCliSignIn(cliCode: string) {
+    const cliSignInCode = await this.prisma.cliSignInCode.findFirst({
+      where: {
+        deviceCode: cliCode,
+      },
+    });
+
+    if (!cliSignInCode) {
+      throw new BadRequestException('Invalid CLI code');
+    }
+
+    if (cliSignInCode.status != CliSignInStatus.Completed) {
+      if (cliSignInCode.expiresAt < new Date()) {
+        await this.prisma.cliSignInCode.update({
+          where: { id: cliSignInCode.id },
+          data: { status: CliSignInStatus.Expired },
+        });
+
+        return {
+          success: true,
+          data: {
+            status: 'expired',
+          },
+        };
+      } else {
+        return {
+          success: true,
+          data: {
+            status: 'pending',
+          },
+        };
+      }
+    }
+
+    const session = await this.prisma.session.findFirst({
+      where: {
+        cliCode,
+      },
+    });
+
+    if (!session) {
+      return {
+        success: true,
+        data: {
+          status: 'failed',
+        },
+      };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: session.userId,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!user) {
+      return {
+        success: true,
+        data: {
+          status: 'failed',
+        },
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        status: 'completed',
+        accessToken: session.accessToken,
+        user,
+      },
+    };
+  }
+
+  async authorizeCliSignIn(userId: string, cliCode: string) {
+    const cliSignInCode = await this.prisma.cliSignInCode.findFirst({
+      where: {
+        deviceCode: cliCode,
+      },
+    });
+
+    if (!cliSignInCode) {
+      throw new BadRequestException('Invalid CLI code');
+    }
+
+    if (cliSignInCode.expiresAt < new Date()) {
+      await this.prisma.cliSignInCode.update({
+        where: { id: cliSignInCode.id },
+        data: { status: CliSignInStatus.Expired },
+      });
+
+      throw new BadRequestException('CLI code has expired');
+    }
+
+    await this.prisma.cliSignInCode.update({
+      where: { id: cliSignInCode.id },
+      data: { status: CliSignInStatus.Completed },
+    });
+
+    const token = await this.generateToken(userId);
+
+    await this.prisma.session.create({
+      data: {
+        userId,
+        accessToken: token,
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        cliCode,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'CLI session authorized',
     };
   }
 }
