@@ -112,7 +112,6 @@ export class UtilsService {
   }
 
   encryptWithPublicKey(data: string, publicKey: string): string {
-    console.log(this.isBase64String(publicKey));
     const pemKey = this.isBase64String(publicKey)
       ? this.base64ToPEM(publicKey)
       : publicKey;
@@ -165,6 +164,22 @@ export class UtilsService {
     );
     const publicKeyObject = crypto.createPublicKey(keyObject);
     return publicKeyObject.export({ type: 'spki', format: 'pem' }).toString();
+  }
+
+  generateRSAKeyPair(): { publicKey: string; privateKey: string } {
+    const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    });
+
+    return { publicKey, privateKey };
   }
 
   parseEnv(envContent: string): Record<string, string> {

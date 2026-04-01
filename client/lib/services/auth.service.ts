@@ -13,9 +13,9 @@ export const signUp = async (body: SignUpDto) => {
   }
 };
 
-export const signIn = async (email: string) => {
+export const signIn = async (email: string, cliCode?: string) => {
   try {
-    const response = await apiClient.post("/auth/sign-in", { email });
+    const response = await apiClient.post("/auth/sign-in", { email, cliCode });
 
     return response.data;
   } catch (error) {

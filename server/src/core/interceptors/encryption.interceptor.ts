@@ -6,6 +6,7 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { isEmpty } from 'lodash';
 import { map, Observable } from 'rxjs';
 import {
   REQUEST_BODY_ENCRYPTION_KEY_REQUEST_HEADER,
@@ -25,7 +26,7 @@ export class EncryptionInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
-    if (request.body) {
+    if (request.body && !isEmpty(request.body)) {
       const decryptedBody = this.decryptRequestBody(request);
       request.body = JSON.parse(decryptedBody);
     }

@@ -286,7 +286,7 @@ export class AuthService {
   async verifyCliSignIn(cliCode: string) {
     const cliSignInCode = await this.prisma.cliSignInCode.findFirst({
       where: {
-        deviceCode: cliCode,
+        deviceCode: cliCode.toString(),
       },
     });
 
@@ -319,9 +319,11 @@ export class AuthService {
 
     const session = await this.prisma.session.findFirst({
       where: {
-        cliCode,
+        cliCode: cliSignInCode.deviceCode,
       },
     });
+
+    console.log(session);
 
     if (!session) {
       return {
@@ -341,6 +343,8 @@ export class AuthService {
         name: true,
       },
     });
+
+    console.log(user);
 
     if (!user) {
       return {

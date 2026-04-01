@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,12 @@ import { toast } from "sonner";
 type Inputs = {
   email: string;
   name: string;
+  cliCode?: string;
 };
 
 export default function SignUpPage() {
   const router = useRouter();
-  const { handleSubmit, control, watch } = useForm<Inputs>();
+  const { handleSubmit, control, watch, setValue } = useForm<Inputs>();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
   const cliCode = searchParams.get("cliCode");
@@ -66,6 +67,12 @@ export default function SignUpPage() {
       return `/passwordless?email=${email}`;
     }
   };
+
+  useEffect(() => {
+    if (cliCode) {
+      setValue("cliCode", cliCode);
+    }
+  }, [cliCode]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

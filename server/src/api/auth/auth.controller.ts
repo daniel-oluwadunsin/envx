@@ -17,7 +17,7 @@ export class AuthController {
   @Post('sign-in')
   @IsPublic()
   async signIn(@Body() body: SignInDto) {
-    return await this.authService.signIn(body.email);
+    return await this.authService.signIn(body.email, body.cliCode);
   }
 
   @Post('sign-up')

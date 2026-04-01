@@ -63,7 +63,7 @@ export default function SignInPage() {
 
   const { mutateAsync: signInMutateAsync, isPending: loading } = useMutation({
     mutationKey: ["signIn"],
-    mutationFn: () => signIn(email),
+    mutationFn: () => signIn(email, cliCode || undefined),
     onSuccess() {
       toast.success("Email sent", {
         description: "A sign-in code has been sent to your email address.",
