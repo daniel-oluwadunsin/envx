@@ -57,19 +57,13 @@ export class EnvrionmentsController {
     return await this.envrionmentsService.createEnv(userId, body);
   }
 
-  @Post('/get-file')
-  async getEnvFile(
-    @Auth('id') userId: string,
-    @Body() body: GetEnvDto,
-    @Res() res: Response,
-  ) {
-    const response = await this.envrionmentsService.getEnvFile(userId, body);
+  @Post('/get-env')
+  async getEnvFile(@Auth('id') userId: string, @Body() body: GetEnvDto) {
+    return await this.envrionmentsService.getEnvFile(userId, body);
+  }
 
-    const signature = response.meta.signature;
-    res.setHeader('X-Env-Signature', signature);
-
-    delete response.meta;
-
-    return res.send(response);
+  @Post('/get-env/keys')
+  async getEnvFileKeys(@Auth('id') userId: string, @Body() body: GetEnvDto) {
+    return await this.envrionmentsService.getEnvKeys(userId, body);
   }
 }

@@ -9,6 +9,8 @@ import * as express from 'express';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { EncryptionInterceptor } from './core/interceptors/encryption.interceptor';
+import { UtilsService } from './shared/services/utils.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -35,6 +37,9 @@ async function bootstrap() {
       },
     }),
   );
+
+  const utilService = app.get(UtilsService);
+  app.useGlobalInterceptors(new EncryptionInterceptor(utilService));
 
   const httpAdapterHost = app.get(HttpAdapterHost);
   app.useGlobalFilters(new GlobalExceptionFilter(httpAdapterHost));

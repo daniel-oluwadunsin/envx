@@ -269,17 +269,23 @@ export class EnvironmentsService {
 
     const decryptedEnvObj = JSON.parse(decryptedEnvString);
 
-    const envSignature =
-      this.utilsService.signWithPrivateKey(decryptedEnvString);
-
     return {
       success: true,
       message: 'Environment file fetched successfully',
       data: {
         envObj: decryptedEnvObj,
       },
-      meta: {
-        signature: envSignature,
+    };
+  }
+
+  async getEnvKeys(userId: string, body: GetEnvDto) {
+    const envObj = await this.getEnvFile(userId, body);
+
+    return {
+      success: true,
+      message: 'Environment keys fetched successfully',
+      data: {
+        envKeys: Object.keys(envObj.data.envObj),
       },
     };
   }
