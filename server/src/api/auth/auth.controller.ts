@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
@@ -55,5 +55,11 @@ export class AuthController {
     @Body() body: VerifyCliSignInDto,
   ) {
     return await this.authService.authorizeCliSignIn(userId, body.cliCode);
+  }
+
+  @IsPublic()
+  @Get('encryption-public-key')
+  async getEncryptionPublicKey() {
+    return await this.authService.getEncryptionPublicKey();
   }
 }

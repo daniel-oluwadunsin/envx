@@ -1,4 +1,9 @@
-import { PipeTransform, ArgumentMetadata, BadRequestException } from '@nestjs/common';
+import {
+  PipeTransform,
+  ArgumentMetadata,
+  BadRequestException,
+} from '@nestjs/common';
+import { isMongoId } from 'class-validator';
 import DEFAULT_MATCHERS from 'src/shared/constants/regex.const';
 
 export class Base64Pipe implements PipeTransform {
@@ -19,6 +24,18 @@ export class IntPipe implements PipeTransform {
     if (isNaN(val)) {
       throw new BadRequestException('parse a valid integer');
     }
+    return val;
+  }
+}
+
+export class MongoIdPipe implements PipeTransform {
+  transform(value: any, metadata: ArgumentMetadata) {
+    const val = value.toString();
+
+    if (!isMongoId(val)) {
+      throw new BadRequestException('parse a valid MongoDB ObjectId');
+    }
+
     return val;
   }
 }

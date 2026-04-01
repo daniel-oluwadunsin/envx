@@ -28,6 +28,7 @@ model User {
   organizationMembers OrganizationMembers[]
   signInCodes         SignInCodes[]
   projects            Projects[]
+  envs                Envs[]
 }
 
 model Organization {
@@ -81,6 +82,8 @@ model Projects {
   organization        Organization        @relation(fields: [organizationId], references: [id])
   createdById         String              @db.ObjectId
   createdBy           User                @relation(fields: [createdById], references: [id])
+  environments        Environment[]
+  envs                Envs[]
 }
 
 model UserProjectAccess {
@@ -130,6 +133,34 @@ model CliSignInCode {
   email     String?
 
   @@index([deviceCode])
+}
+
+model Environment {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  projectId   String   @db.ObjectId
+  project     Projects @relation(fields: [projectId], references: [id])
+  slug        String
+  description String?
+  envs        Envs[]
+
+  @@unique([projectId, slug])
+}
+
+model Envs {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  environmentId String      @db.ObjectId
+  environment   Environment @relation(fields: [environmentId], references: [id])
+  projectId     String      @db.ObjectId
+  project       Projects    @relation(fields: [projectId], references: [id])
+  createdById   String      @db.ObjectId
+  createdBy     User        @relation(fields: [createdById], references: [id])
+  version       Int         @default(1)
+  isDeleted     Boolean     @default(false)
+  blobUrl       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum UserRoles {

@@ -8,5 +8,6 @@ import { ProjectController } from './project.controller';
   imports: [DatabaseModule, SharedModule],
   providers: [ProjectService],
   controllers: [ProjectController],
+  exports: [ProjectService],
 })
 export class ProjectModule {}

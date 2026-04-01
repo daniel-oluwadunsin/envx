@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { OrganizationModule } from './organization/organization.module';
 import { ProjectModule } from './project/project.module';
+import { EnvironmentsModule } from './envrionments/environments.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { ProjectModule } from './project/project.module';
     UserModule,
     OrganizationModule,
     ProjectModule,
+    EnvironmentsModule,
   ],
 })
 export class ApiModule {}

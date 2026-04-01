@@ -1,12 +1,19 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
 import { CreateProjectDto } from './dtos';
 import * as crypto from 'crypto';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { EventNames } from 'src/shared/enums';
+import { CacheKeys, EventNames } from 'src/shared/enums';
 import { DeleteUserProjectAccess, PopulateProjectAccess } from './interfaces';
 import { UtilsService } from 'src/shared/services/utils.service';
 import { UserProjectRoles } from 'generated/prisma/enums';
+import { REDIS_PROVIDER } from 'src/shared/providers/redis.provider';
+import { Redis } from 'ioredis';
 
 @Injectable()
 export class ProjectService {
@@ -16,8 +23,80 @@ export class ProjectService {
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly utilService: UtilsService,
+    @Inject(REDIS_PROVIDER) private readonly redis: Redis,
   ) {
     this.logger = new Logger(ProjectService.name);
+  }
+
+  async verifyUserProjectAccess(
+    userId: string,
+    projectId: string,
+  ): Promise<boolean> {
+    const getAccess = async () => {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          encryptionKey: true,
+        },
+      });
+
+      if (!user) return false;
+
+      const access = await this.prisma.userProjectAccess.findUnique({
+        where: {
+          userId_projectId: {
+            userId,
+            projectId,
+          },
+        },
+        select: {
+          encryptedKey: true,
+          project: {
+            select: {
+              projectKey: true,
+            },
+          },
+        },
+      });
+
+      if (!access || !access.project) return false;
+
+      const accessKey = access.encryptedKey;
+      const userEncryptionKey = user.encryptionKey;
+      const projectKey = access.project.projectKey;
+
+      if ([accessKey, userEncryptionKey, projectKey].some((key) => !key))
+        return false;
+
+      try {
+        const decryptedProjectKey = this.utilService.decrypt(
+          JSON.parse(accessKey),
+          userEncryptionKey,
+        );
+
+        if (decryptedProjectKey != projectKey) return false;
+
+        return true;
+      } catch (error) {
+        this.logger.error(`Error verifying project access ${error}`);
+        return false;
+      }
+    };
+
+    const cacheKey = CacheKeys.UserProjectAccess(userId, projectId);
+    const cachedAccess = await this.redis.get(cacheKey);
+    if (cachedAccess) {
+      return cachedAccess === 'true';
+    }
+
+    const access = await getAccess();
+    if (access) {
+      await this.redis.set(cacheKey, 'true', 'EX', 60 * 30); // Cache for 30 minutes
+    }
+
+    return access;
   }
 
   private async generateProjectKey(): Promise<string> {
@@ -151,7 +230,7 @@ export class ProjectService {
         try {
           const encryptedProjectKey = this.utilService.encrypt(
             project.projectKey,
-            Buffer.from(user.encryptionKey, 'hex'),
+            user.encryptionKey,
           );
 
           const encryptedProjectKeyString = JSON.stringify(encryptedProjectKey);

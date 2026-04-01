@@ -14,6 +14,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { CliSignInStatus } from 'generated/prisma/enums';
 import { Prisma } from 'generated/prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { readFileSync } from 'fs';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +24,7 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2,
     private readonly utilsService: UtilsService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   private async generateUserKey(): Promise<string> {
@@ -397,6 +400,21 @@ export class AuthService {
     return {
       success: true,
       message: 'CLI session authorized',
+    };
+  }
+
+  async getEncryptionPublicKey() {
+    const publicKey = this.utilsService.generatePublicKeyFromPrivateKey();
+
+    if (!publicKey)
+      throw new BadRequestException('Oops! public encryption key not set');
+
+    return {
+      success: true,
+      message: 'Encryption key fetched successfully',
+      data: {
+        publicKey,
+      },
     };
   }
 }
