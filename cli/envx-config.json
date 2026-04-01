@@ -1,5 +1,9 @@
 {
-  "project_id": "",
-  "current_env_version": "1",
-  "environment": "development"
+  "projectId": "69cd3b2cf6fb7af4e237ee9a",
+  "organizationId": "69cd32c7c16ec3195f81ef69",
+  "currentEnvVersion": 1,
+  "environment": "",
+  "localBackupBeforePull": true,
+  "localBackupPath": ".env.backup",
+  "envFilePath": ".env"
 }

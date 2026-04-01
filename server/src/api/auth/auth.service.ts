@@ -392,7 +392,7 @@ export class AuthService {
 
     const token = await this.generateToken(userId);
 
-    await this.prisma.session.create({
+    const session = await this.prisma.session.create({
       data: {
         userId,
         accessToken: token,

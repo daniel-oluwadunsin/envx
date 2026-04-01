@@ -88,6 +88,16 @@ export class EnvironmentsService {
         name: true,
         slug: true,
         description: true,
+        envs: {
+          select: {
+            version: true,
+            createdAt: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
       },
     });
 
@@ -97,7 +107,9 @@ export class EnvironmentsService {
         name: env.name,
         slug: env.slug,
         description: env.description,
-        // return latest env id, and version
+        projectId: projectId,
+        latestVersion: env.envs[0]?.version || 0,
+        lastUpdated: env.envs[0]?.createdAt || null,
       };
     });
 
@@ -274,6 +286,7 @@ export class EnvironmentsService {
       message: 'Environment file fetched successfully',
       data: {
         envObj: decryptedEnvObj,
+        version: env.version,
       },
     };
   }

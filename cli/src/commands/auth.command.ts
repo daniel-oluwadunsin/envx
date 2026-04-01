@@ -31,13 +31,18 @@ envxProgram
       let status: SignInStatus = "pending";
       let authResponse: VerifyCliSignInResponse | null = null;
 
-      while (
-        differenceInMilliseconds(new Date(), startTime) < AUTH_TIMEOUT &&
-        status === "pending"
-      ) {
+      // rewrite with setInterval for better performance and user experience
+      while (differenceInMilliseconds(new Date(), startTime) < AUTH_TIMEOUT) {
         authResponse = await authService.verifyCliSignIn(cliCode);
 
         status = authResponse.status;
+
+        if (status !== "pending") {
+          break;
+        }
+
+        // wait for 3 seconds before checking again
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
 
       if (status === "failed") {

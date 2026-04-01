@@ -339,12 +339,17 @@ export class OrganizationService {
       },
     });
 
-    const data = memberships.map((m) => ({
-      ...m.organization,
-      role: m.organization.ownerId === userId ? 'owner' : 'member',
-      membersCount: m.organization._count.organizationMembers,
-      projectsCount: m.organization._count.projects,
-    }));
+    const data = memberships.map((m) => {
+      delete m.organization.githubToken;
+      delete m.organization.gitlabToken;
+      const { _count, ...organization } = m.organization;
+      return {
+        ...organization,
+        role: organization.ownerId === userId ? 'owner' : 'member',
+        membersCount: _count.organizationMembers,
+        projectsCount: _count.projects,
+      };
+    });
 
     return {
       success: true,

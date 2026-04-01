@@ -15,7 +15,7 @@ import { CreateEnvDto, CreateEnvironmentDto, GetEnvDto } from './dtos';
 import { MongoIdPipe } from 'src/core/pipes';
 import { Response } from 'express';
 
-@Controller('envrionment')
+@Controller('environment')
 export class EnvrionmentsController {
   constructor(private readonly envrionmentsService: EnvironmentsService) {}
 

@@ -9,6 +9,6 @@ export class CreateProjectDto {
   @IsMongoId()
   organizationId: string;
 
-  @IsString(false)
+  @IsString(true)
   description?: string;
 }
