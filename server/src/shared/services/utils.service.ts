@@ -8,6 +8,18 @@ import { generateKeyPairSync } from 'crypto';
 export class UtilsService {
   constructor(private readonly configService: ConfigService) {}
 
+  isBase64String(str: string): boolean {
+    // Base64 characters: A-Z, a-z, 0-9, +, /, optional padding =
+    const base64Regex =
+      /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
+    return base64Regex.test(str);
+  }
+
+  base64ToPEM(base64Key: string): string {
+    const formatted = base64Key.match(/.{1,64}/g)?.join('\n'); // split lines
+    return `-----BEGIN PUBLIC KEY-----\n${formatted}\n-----END PUBLIC KEY-----`;
+  }
+
   generateRandomCode(length: number, { digitsOnly = false } = {}): string {
     const characters = digitsOnly
       ? '0123456789'
@@ -43,7 +55,7 @@ export class UtilsService {
     text: string | Buffer,
     key: Buffer | string,
   ): { iv: string; data: string; authTag: string } {
-    key = typeof key === 'string' ? Buffer.from(key, 'hex') : key;
+    key = typeof key === 'string' ? Buffer.from(key, 'base64') : key;
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
@@ -56,9 +68,9 @@ export class UtilsService {
     const authTag = cipher.getAuthTag();
 
     return {
-      iv: iv.toString('hex'),
-      data: encrypted.toString('hex'),
-      authTag: authTag.toString('hex'),
+      iv: iv.toString('base64'),
+      data: encrypted.toString('base64'),
+      authTag: authTag.toString('base64'),
     };
   }
 
@@ -66,15 +78,15 @@ export class UtilsService {
     encrypted: { iv: string; data: string; authTag: string },
     key: Buffer | string,
   ): string {
-    key = typeof key === 'string' ? Buffer.from(key, 'hex') : key;
-    const iv = Buffer.from(encrypted.iv, 'hex');
-    const authTag = Buffer.from(encrypted.authTag, 'hex');
+    key = typeof key === 'string' ? Buffer.from(key, 'base64') : key;
+    const iv = Buffer.from(encrypted.iv, 'base64');
+    const authTag = Buffer.from(encrypted.authTag, 'base64');
 
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(authTag);
 
     const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(encrypted.data, 'hex')),
+      decipher.update(Buffer.from(encrypted.data, 'base64')),
       decipher.final(),
     ]);
 
@@ -84,31 +96,38 @@ export class UtilsService {
   decryptWithPrivateKey(encryptedData: string, privateKey?: string) {
     privateKey =
       privateKey || this.configService.get<string>('ENCRYPTION_PRIVATE_KEY');
-    const buffer = Buffer.from(encryptedData, 'hex');
+
+    const buffer = Buffer.from(encryptedData, 'base64');
 
     const decryptedData = crypto.privateDecrypt(
       {
         key: privateKey,
-        padding: crypto.constants.RSA_PKCS1_PADDING,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
       },
       buffer,
     );
 
-    return decryptedData.toString('utf-8');
+    return decryptedData;
   }
 
   encryptWithPublicKey(data: string, publicKey: string): string {
+    console.log(this.isBase64String(publicKey));
+    const pemKey = this.isBase64String(publicKey)
+      ? this.base64ToPEM(publicKey)
+      : publicKey;
     const buffer = Buffer.from(data, 'utf-8');
 
     const encryptedData = crypto.publicEncrypt(
       {
-        key: publicKey,
-        padding: crypto.constants.RSA_PKCS1_PADDING,
+        key: pemKey,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: 'sha256',
       },
       buffer,
     );
 
-    return encryptedData.toString('hex');
+    return encryptedData.toString('base64');
   }
 
   signWithPrivateKey(data: string, privateKey?: string): string {
@@ -118,10 +137,11 @@ export class UtilsService {
 
     const signature = crypto.sign('sha256', buffer, {
       key: privateKey,
-      padding: crypto.constants.RSA_PKCS1_PADDING,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
     });
 
-    return signature.toString('hex');
+    return signature.toString('base64');
   }
 
   verifyWithPublicKey(
@@ -130,7 +150,7 @@ export class UtilsService {
     publicKey: string,
   ): boolean {
     const buffer = Buffer.from(data, 'utf-8');
-    const signatureBuffer = Buffer.from(signature, 'hex');
+    const signatureBuffer = Buffer.from(signature, 'base64');
 
     const verify = crypto.createVerify('sha256');
     verify.update(buffer);

@@ -11,6 +11,7 @@ import * as cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EncryptionInterceptor } from './core/interceptors/encryption.interceptor';
 import { UtilsService } from './shared/services/utils.service';
+import { RESPONSE_BODY_ENCRYPTION_KEY_HEADER } from './shared/constants/headers.const';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -22,6 +23,7 @@ async function bootstrap() {
   app.enableCors({
     origin: ['http://localhost:3000'],
     credentials: true,
+    exposedHeaders: [RESPONSE_BODY_ENCRYPTION_KEY_HEADER],
   });
 
   app.use(cookieParser());

@@ -18,6 +18,11 @@ function stringToArrayBuffer(str: string) {
   return encoder.encode(str).buffer;
 }
 
+function arrayBufferToString(buffer: ArrayBuffer) {
+  const decoder = new TextDecoder();
+  return decoder.decode(buffer);
+}
+
 export async function generateAESKey() {
   return await window.crypto.subtle.generateKey(
     {
@@ -29,22 +34,54 @@ export async function generateAESKey() {
   );
 }
 
+function pemToArrayBuffer(pem: string) {
+  // remove header, footer, newlines
+  const b64 = pem
+    .replace(/-----BEGIN PUBLIC KEY-----/, "")
+    .replace(/-----END PUBLIC KEY-----/, "")
+    .replace(/\s/g, "");
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function importRSAPublicKey(pem: string) {
+  const buffer = pemToArrayBuffer(pem);
+  return await window.crypto.subtle.importKey(
+    "spki",
+    buffer,
+    { name: "RSA-OAEP", hash: "SHA-256" },
+    true,
+    ["encrypt"],
+  );
+}
+
 // AES-GCM encryption
 export async function encryptAES(plainText: string, key: CryptoKey) {
   const encoder = new TextEncoder();
   const data = encoder.encode(plainText);
 
-  const iv = window.crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
   const encryptedBuffer = await window.crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
     data,
   );
 
-  // AES-GCM appends 16-byte auth tag at the end
   const encryptedBytes = new Uint8Array(encryptedBuffer);
-  const ciphertextBytes = encryptedBytes.slice(0, encryptedBytes.length - 16);
-  const authTagBytes = encryptedBytes.slice(encryptedBytes.length - 16);
+
+  // AES-GCM appends a 16-byte auth tag at the end
+  const tagLength = 16;
+  const ciphertextBytes = encryptedBytes.slice(
+    0,
+    encryptedBytes.length - tagLength,
+  );
+  const authTagBytes = encryptedBytes.slice(encryptedBytes.length - tagLength);
 
   return {
     iv: arrayBufferToBase64(iv.buffer),
@@ -52,7 +89,6 @@ export async function encryptAES(plainText: string, key: CryptoKey) {
     authTag: arrayBufferToBase64(authTagBytes.buffer),
   };
 }
-
 export async function decryptAES(
   payload: { iv: string; data: string; authTag: string },
   key: CryptoKey,
@@ -108,7 +144,7 @@ export async function encryptAESKeyWithRSA(
   aesKey: CryptoKey,
   publicKeyString: string,
 ) {
-  const publicKeyBuffer = stringToArrayBuffer(publicKeyString);
+  const publicKeyBuffer = pemToArrayBuffer(publicKeyString);
   const importedPublicKey = await window.crypto.subtle.importKey(
     "spki",
     publicKeyBuffer,
@@ -130,11 +166,49 @@ export async function encryptAESKeyWithRSA(
   return arrayBufferToBase64(encryptedAesKeyBuffer);
 }
 
+export async function decryptAESKeyWithRSA(
+  encryptedAesKey: string,
+  privateKeyString: string,
+) {
+  const privateKeyBuffer = pemToArrayBuffer(privateKeyString);
+
+  const importedPrivateKey = await window.crypto.subtle.importKey(
+    "pkcs8",
+    privateKeyBuffer,
+    {
+      name: "RSA-OAEP",
+      hash: "SHA-256",
+    },
+    false,
+    ["decrypt"],
+  );
+
+  const encryptedAesKeyBuffer = base64ToArrayBuffer(encryptedAesKey);
+  const decryptedAesKeyBuffer = await window.crypto.subtle.decrypt(
+    { name: "RSA-OAEP" },
+    importedPrivateKey,
+    encryptedAesKeyBuffer,
+  );
+
+  const decryptedKeyString = arrayBufferToString(decryptedAesKeyBuffer);
+
+  // Step 2: convert Base64 string back to raw bytes
+  const aesKeyBuffer = base64ToArrayBuffer(decryptedKeyString);
+
+  return await window.crypto.subtle.importKey(
+    "raw",
+    aesKeyBuffer,
+    { name: "AES-GCM" },
+    true,
+    ["encrypt", "decrypt"],
+  );
+}
+
 export async function decryptStringWithRSA(
   encryptedString: string,
   privateKeyString: string,
 ) {
-  const privateKeyBuffer = stringToArrayBuffer(privateKeyString);
+  const privateKeyBuffer = pemToArrayBuffer(privateKeyString);
   const importedPrivateKey = await window.crypto.subtle.importKey(
     "pkcs8",
     privateKeyBuffer,

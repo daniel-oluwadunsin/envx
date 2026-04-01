@@ -104,7 +104,7 @@ export class ProjectService {
     let exists = true;
 
     while (exists) {
-      key = crypto.randomBytes(32).toString('hex');
+      key = crypto.randomBytes(32).toString('base64');
 
       const existingProject = await this.prisma.projects.findUnique({
         where: { projectKey: key },

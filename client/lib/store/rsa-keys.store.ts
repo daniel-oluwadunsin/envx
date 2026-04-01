@@ -3,6 +3,7 @@ import { create } from "zustand";
 type RSAKeys = {
   publicKey: string;
   privateKey: string;
+  encryptedPublicKey?: string;
 };
 
 interface RSAKeysState {

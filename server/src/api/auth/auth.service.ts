@@ -32,7 +32,7 @@ export class AuthService {
     let exists = true;
 
     while (exists) {
-      key = crypto.randomBytes(32).toString('hex');
+      key = crypto.randomBytes(32).toString('base64');
 
       const existingUser = await this.prisma.user.findFirst({
         where: { encryptionKey: key },

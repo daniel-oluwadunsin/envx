@@ -3,6 +3,7 @@ import { useUserStore } from "../store/user.store";
 import { toast } from "sonner";
 import {
   decryptAES,
+  decryptAESKeyWithRSA,
   decryptStringWithRSA,
   encryptAES,
   encryptAESKeyWithRSA,
@@ -31,10 +32,10 @@ import { useRSAKeysStore } from "../store/rsa-keys.store";
  */
 
 const REQUEST_BODY_ENCRYPTION_KEY_REQUEST_HEADER =
-  "X-Request-Body-Encryption-Key";
-const RESPONSE_BODY_ENCRYPTION_KEY_HEADER = "X-Response-Body-Encryption-Key";
+  "x-request-body-encryption-key";
+const RESPONSE_BODY_ENCRYPTION_KEY_HEADER = "x-response-body-encryption-key";
 const RESPONSE_BODY_PUBLIC_KEY_ENCRYPTION_KEY_HEADER =
-  "X-Response-Body-Public-Key-Encryption-Key";
+  "x-response-body-public-key-encryption-key";
 const ENCRYPTION_PUBLIC_KEY = process.env.NEXT_PUBLIC_ENCRYPTION_PUBLIC_KEY!;
 
 export const apiClient = axios.create({
@@ -67,7 +68,6 @@ apiClient.interceptors.request.use(async (config) => {
 
   // encryption key for response
   const { publicKey, privateKey } = await generateRSAKeyPair();
-  rsaStore.setKey({ publicKey, privateKey });
 
   const aesKeyForResponse = await generateAESKey();
 
@@ -87,42 +87,53 @@ apiClient.interceptors.request.use(async (config) => {
   config.headers[RESPONSE_BODY_PUBLIC_KEY_ENCRYPTION_KEY_HEADER] =
     JSON.stringify(encryptedPublicKeyForResponse);
 
+  rsaStore.setKey({
+    publicKey,
+    privateKey,
+    encryptedPublicKey: JSON.stringify(encryptedPublicKeyForResponse),
+  });
+
   return config;
 });
 
 const authRoutes = ["/dashboard", "/org", "project"];
 
 apiClient.interceptors.response.use(
-  async (config: AxiosResponse) => {
+  async (response: AxiosResponse) => {
     const rsaStore = useRSAKeysStore.getState();
-    const request = config.request as AxiosRequestConfig;
+    const request = response.config as AxiosRequestConfig;
 
-    if (config.data) {
+    if (response.data) {
       const publicKeyForResponseHeader =
         request.headers?.[RESPONSE_BODY_PUBLIC_KEY_ENCRYPTION_KEY_HEADER];
       const aesEncryptionKeyForPublicKey =
-        request.headers?.[RESPONSE_BODY_ENCRYPTION_KEY_HEADER];
+        response.headers?.[RESPONSE_BODY_ENCRYPTION_KEY_HEADER];
 
-      const encryptedPublicKeyForResponse = JSON.parse(
-        publicKeyForResponseHeader,
+      const keyPairEncryptedKey = rsaStore.keys?.find(
+        (key) => key.encryptedPublicKey === publicKeyForResponseHeader,
+      );
+      if (!keyPairEncryptedKey) {
+        return Promise.reject(
+          new Error(
+            "Failed to find matching RSA key pair for response decryption",
+          ),
+        );
+      }
+
+      const decryptedAesKeyForPublicKey = await decryptAESKeyWithRSA(
+        aesEncryptionKeyForPublicKey as string,
+        keyPairEncryptedKey.privateKey,
       );
 
-      const decryptedPublicKeyForResponse = await decryptAES(
-        encryptedPublicKeyForResponse,
-        aesEncryptionKeyForPublicKey,
-      );
-
-      const keyPair = rsaStore.keys?.find(
-        (key) => key.publicKey === decryptedPublicKeyForResponse,
-      );
+      const keyPair = keyPairEncryptedKey;
 
       if (keyPair) {
-        const decryptedResponse = await decryptStringWithRSA(
-          config.data,
-          keyPair.privateKey,
+        const decryptedResponse = await decryptAES(
+          response.data,
+          decryptedAesKeyForPublicKey,
         );
 
-        config.data = JSON.parse(decryptedResponse);
+        response.data = JSON.parse(decryptedResponse);
         rsaStore.removeKeyWithPrivateKey(keyPair.privateKey);
       } else {
         return Promise.reject(
@@ -133,7 +144,7 @@ apiClient.interceptors.response.use(
       }
     }
 
-    return config;
+    return response;
   },
   (error: AxiosError) => {
     if (error.response?.status === 401) {
