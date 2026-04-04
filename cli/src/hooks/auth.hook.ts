@@ -5,7 +5,7 @@ import Logger from "../utils/logger";
 
 const logger = new Logger("auth-hook");
 
-const publicCommands = ["login"];
+const publicCommands = ["login", "help", "version"];
 
 envxProgram.hook("preAction", async (thisCommand, actionCommand) => {
   if (publicCommands.includes(actionCommand.name())) {

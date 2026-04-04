@@ -191,60 +191,68 @@ const configurationPrompts = async (
   await createEnvxConfigFile(configFile, config);
 };
 
-envxProgram.command("init").action(async () => {
-  try {
+envxProgram
+  .command("init")
+  .description("Initialize envx in the current project")
+  .action(async () => {
+    try {
+      const configFile = getConfigFilePath();
+
+      const exists = fs.existsSync(configFile);
+
+      if (exists) {
+        logger.error(
+          `Config file already exists at ${configFile}. Aborting....`,
+        );
+        return;
+      }
+
+      const initialConfig: CreateEnvxConfigFileParams = {
+        projectId: "",
+        currentEnvVersion: 1,
+        environment: "",
+        localBackupBeforePull: true,
+        localBackupPath: DEFAULT_LOCAL_BACKUP_PATH,
+        envFilePath: DEFAULT_ENV_FILE_PATH,
+        alwaysOverrideEnvFile: false,
+      };
+
+      await configurationPrompts(initialConfig, configFile, true);
+
+      logger.success(
+        "Envx configured successfully, config file created at " + configFile,
+      );
+    } catch (error) {
+      logger.error("Failed to initialize envx config file:", error);
+    }
+  });
+
+envxProgram
+  .command("configure")
+  .description("Update envx configuration interactively")
+  .action(async () => {
     const configFile = getConfigFilePath();
 
-    const exists = fs.existsSync(configFile);
-
-    if (exists) {
-      logger.error(`Config file already exists at ${configFile}. Aborting....`);
+    if (!fs.existsSync(configFile)) {
+      logger.error(
+        `Config file not found at ${configFile}. Please run 'envx init' first to create the config file.`,
+      );
       return;
     }
 
-    const initialConfig: CreateEnvxConfigFileParams = {
-      projectId: "",
-      currentEnvVersion: 1,
-      environment: "",
-      localBackupBeforePull: true,
-      localBackupPath: DEFAULT_LOCAL_BACKUP_PATH,
-      envFilePath: DEFAULT_ENV_FILE_PATH,
-      alwaysOverrideEnvFile: false,
-    };
+    try {
+      const configContent = await fsp.readFile(configFile, {
+        encoding: "utf-8",
+      });
+      const config: CreateEnvxConfigFileParams = JSON.parse(configContent);
+      logger.info("Current configuration:");
+      logger.info(JSON.stringify(config, null, 2));
 
-    await configurationPrompts(initialConfig, configFile, true);
+      await configurationPrompts(config, configFile, false);
 
-    logger.success(
-      "Envx configured successfully, config file created at " + configFile,
-    );
-  } catch (error) {
-    logger.error("Failed to initialize envx config file:", error);
-  }
-});
-
-envxProgram.command("configure").action(async () => {
-  const configFile = getConfigFilePath();
-
-  if (!fs.existsSync(configFile)) {
-    logger.error(
-      `Config file not found at ${configFile}. Please run 'envx init' first to create the config file.`,
-    );
-    return;
-  }
-
-  try {
-    const configContent = await fsp.readFile(configFile, {
-      encoding: "utf-8",
-    });
-    const config: CreateEnvxConfigFileParams = JSON.parse(configContent);
-    logger.info("Current configuration:");
-    logger.info(JSON.stringify(config, null, 2));
-
-    await configurationPrompts(config, configFile, false);
-
-    logger.success("Configuration updated successfully");
-  } catch (error) {
-    logger.error(`Failed to read config file at ${configFile}:`, error);
-    return;
-  }
-});
+      logger.success("Configuration updated successfully");
+    } catch (error) {
+      logger.error(`Failed to read config file at ${configFile}:`, error);
+      return;
+    }
+  });

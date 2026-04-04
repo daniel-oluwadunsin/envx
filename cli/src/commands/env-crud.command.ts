@@ -27,27 +27,37 @@ import {
 
 const logger = new Logger("env-crud");
 
-const environmentsCommand = envxProgram.command("environments");
-const organizationsCommand = envxProgram.command("organizations");
-const projectsCommand = envxProgram.command("projects");
+const environmentsCommand = envxProgram
+  .command("environments")
+  .description("Manage project environments");
+const organizationsCommand = envxProgram
+  .command("organizations")
+  .description("Manage organizations");
+const projectsCommand = envxProgram
+  .command("projects")
+  .description("Manage projects");
 
-organizationsCommand.command("list").action(async () => {
-  logger.info("Fetching organizations...");
+organizationsCommand
+  .command("list")
+  .description("List organizations available to your account")
+  .action(async () => {
+    logger.info("Fetching organizations...");
 
-  const orgs = await orgService.getOrgs();
+    const orgs = await orgService.getOrgs();
 
-  if (orgs.length === 0) {
-    logger.info("No organizations found.");
-    process.exit(1);
-  }
+    if (orgs.length === 0) {
+      logger.info("No organizations found.");
+      process.exit(1);
+    }
 
-  orgs.forEach((org) => {
-    logger.info(`- ${org.name} (ID: ${org.id})`);
+    orgs.forEach((org) => {
+      logger.info(`- ${org.name} (ID: ${org.id})`);
+    });
   });
-});
 
 projectsCommand
   .command("list")
+  .description("List projects in your organizations")
   .option("-o, --organization <organizationId>")
   .action(async (_, options) => {
     const { organizationId, skipOrgs } = options;
@@ -76,6 +86,7 @@ projectsCommand
 
 environmentsCommand
   .command("list")
+  .description("List environments for a project")
   .option("-p --project <projectId>")
   .action(async (_, options) => {
     logger.info("Fetching environments...");
@@ -115,6 +126,7 @@ environmentsCommand
 
 environmentsCommand
   .command("create [name]")
+  .description("Create a new environment")
   .option("-p --project <projectId>")
   .action(async (name, options) => {
     const { projectId } = options;
@@ -163,6 +175,7 @@ environmentsCommand
 
 envxProgram
   .command("switch <environment>")
+  .description("Switch the active environment and pull its env file")
   .option(
     "-p --project <projectId>",
     "Specify project ID to switch environment in",
@@ -257,6 +270,7 @@ envxProgram
 
 envxProgram
   .command("pull")
+  .description("Pull environment variables from remote to local file")
   .option(
     "-f --file <filePath>",
     "Specify custom path to save the pulled env file",
@@ -391,6 +405,7 @@ envxProgram
 
 envxProgram
   .command("push")
+  .description("Push local env file to the current environment")
   .requiredOption(
     "-c, --changelog <changelog>",
     "Add a changelog message for this push",

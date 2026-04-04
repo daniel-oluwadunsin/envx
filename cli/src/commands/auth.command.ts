@@ -13,7 +13,7 @@ const logger = new Logger("auth");
 
 envxProgram
   .command("login")
-  .description("Login to envx")
+  .description("Authenticate and login to envx")
   .action(async () => {
     try {
       const cliCode = await authService.initSignIn();
@@ -76,5 +76,24 @@ envxProgram
     } catch (error) {
       console.log(error);
       logger.error("Error signing in, try again");
+    }
+  });
+
+envxProgram
+  .command("logout")
+  .description("Logout and clear your authenticated session")
+  .action(async () => {
+    try {
+      const keychainData = await keychainService.getValue(KeychainKey.Access);
+
+      if (!keychainData) {
+        logger.warning("You are not logged in.");
+        return;
+      }
+
+      await keychainService.deleteValue(KeychainKey.Access);
+      logger.success("Successfully logged out! ✅");
+    } catch (error) {
+      logger.error("Error logging out, try again");
     }
   });
