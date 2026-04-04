@@ -1,4 +1,7 @@
-import { CreateEnvxConfigFileParams } from "../types/script";
+import {
+  CreateEnvFileParams,
+  CreateEnvxConfigFileParams,
+} from "../types/script";
 import fsp from "fs/promises";
 import fs from "fs";
 import path from "path";
@@ -7,31 +10,71 @@ import {
   DEFAULT_LOCAL_BACKUP_PATH,
 } from "../configs/const";
 import Logger from "../utils/logger";
+import { parseEnv, parseObjectToEnv } from "../utils/parser";
 
 const logger = new Logger("scripts");
+
+const addFileToGitIgnore = async (fileName: string) => {
+  const gitignorePath = path.join(process.cwd(), ".gitignore");
+
+  if (fs.existsSync(gitignorePath)) {
+    const gitignoreContent = await fsp.readFile(gitignorePath, "utf-8");
+    if (!gitignoreContent.includes(fileName)) {
+      await fsp.appendFile(gitignorePath, `\n${fileName}\n`, {
+        encoding: "utf-8",
+      });
+      logger.info(
+        `Added ${fileName} to .gitignore to prevent it from being committed.`,
+      );
+    }
+  }
+};
 
 export const createEnvxConfigFile = async (
   configFilePath: string,
   config: CreateEnvxConfigFileParams,
 ) => {
-  if (config.localBackupBeforePull) {
-    const envFilePath = path.join(
-      process.cwd(),
-      config.envFilePath || DEFAULT_ENV_FILE_PATH,
+  try {
+    await fsp.writeFile(configFilePath, JSON.stringify(config, null, 2), {
+      encoding: "utf-8",
+    });
+    logger.success(`Envx config file created at ${configFilePath}`);
+  } catch (error) {
+    logger.error(
+      `Failed to create envx config file at ${configFilePath}:`,
+      error,
     );
+    throw error;
+  }
+};
 
+export const createEnvFile = async (params: CreateEnvFileParams) => {
+  if (!params.envContent) {
+    logger.error("Env content is required to create env file.");
+    return;
+  }
+
+  const envFilePath = path.join(
+    process.cwd(),
+    params.envFilePath || DEFAULT_ENV_FILE_PATH,
+  );
+
+  if (params.localBackupBeforePull) {
     const localBackupPath = path.join(
       process.cwd(),
-      config.localBackupPath || DEFAULT_LOCAL_BACKUP_PATH,
+      params.localBackupPath || DEFAULT_LOCAL_BACKUP_PATH,
     );
 
     try {
       if (fs.existsSync(envFilePath)) {
-        await fsp.copyFile(
-          envFilePath,
-          localBackupPath,
-          fs.constants.COPYFILE_FICLONE_FORCE, // override if exists, and try to create a copy-on-write clone for efficiency
-        );
+        if (!fs.existsSync(localBackupPath)) {
+          await fsp.writeFile(localBackupPath, "", { encoding: "utf-8" });
+        }
+
+        await fsp.copyFile(envFilePath, localBackupPath);
+
+        const backupFileName = path.basename(localBackupPath);
+        await addFileToGitIgnore(backupFileName);
 
         logger.success(
           `Local backup created at ${localBackupPath} before pulling from server.`,
@@ -48,18 +91,30 @@ export const createEnvxConfigFile = async (
       );
       throw error;
     }
-
-    try {
-      await fsp.writeFile(configFilePath, JSON.stringify(config, null, 2), {
-        encoding: "utf-8",
-      });
-      logger.success(`Envx config file created at ${configFilePath}`);
-    } catch (error) {
-      logger.error(
-        `Failed to create envx config file at ${configFilePath}:`,
-        error,
-      );
-      throw error;
-    }
   }
+
+  const previousEnvContentExists = fs.existsSync(envFilePath);
+
+  if (params.overrideEnvFile || !previousEnvContentExists) {
+    await fsp.writeFile(envFilePath, params.envContent, {
+      encoding: "utf-8",
+    });
+  } else {
+    const previousEnvContent = await fsp.readFile(envFilePath, "utf-8");
+
+    const previousEnvObj = parseEnv(previousEnvContent);
+    const currentEnvObj = parseEnv(params.envContent);
+
+    Object.entries(currentEnvObj).forEach(([key, value]) => {
+      previousEnvObj[key] = value;
+    });
+
+    const newEnvContent = parseObjectToEnv(previousEnvObj);
+
+    await fsp.writeFile(envFilePath, newEnvContent, {
+      encoding: "utf-8",
+    });
+  }
+
+  logger.success(`Env file created at ${envFilePath}`);
 };

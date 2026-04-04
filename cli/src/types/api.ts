@@ -26,6 +26,14 @@ export type GetEnvDto = {
   version?: number;
 };
 
+export type CreateEnvDto = {
+  envSlug: string;
+  envFile: string;
+  projectId?: string;
+  encryptionKey?: string;
+  changelog?: string;
+};
+
 export type Project = {
   id: string;
   name: string;

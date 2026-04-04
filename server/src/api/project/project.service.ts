@@ -150,6 +150,16 @@ export class ProjectService {
       },
     });
 
+    await this.prisma.environment.create({
+      data: {
+        name: 'Default',
+        description:
+          'This is the default environment created with the project.',
+        slug: this.utilService.slugify('Default'),
+        project: { connect: { id: project.id } },
+      },
+    });
+
     const users = await this.prisma.organizationMembers.findMany({
       where: { organizationId },
       select: { userId: true },

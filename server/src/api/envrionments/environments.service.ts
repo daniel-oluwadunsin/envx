@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
 import { CreateEnvDto, CreateEnvironmentDto, GetEnvDto } from './dtos';
@@ -121,7 +122,9 @@ export class EnvironmentsService {
   }
 
   async createEnv(userId: string, body: CreateEnvDto) {
-    const { envFile, envSlug, projectId } = body;
+    const { envFile, envSlug: _envSlug, projectId } = body;
+
+    const envSlug = this.utilsService.slugify(_envSlug);
 
     const hasProjectAccess = await this.projectService.verifyUserProjectAccess(
       userId,
@@ -144,7 +147,7 @@ export class EnvironmentsService {
 
     if (!project) throw new ConflictException('Oops! project does not exist');
 
-    const environment = await this.prisma.environment.findUnique({
+    let environment = await this.prisma.environment.findUnique({
       where: {
         projectId_slug: {
           slug: envSlug,
@@ -153,8 +156,18 @@ export class EnvironmentsService {
       },
     });
 
-    if (!environment)
-      throw new ConflictException('Oops! environment does not exist');
+    if (!environment) {
+      const { data } = await this.createEnvironment(userId, {
+        name: _envSlug,
+        projectId,
+      });
+
+      environment = await this.prisma.environment.findUnique({
+        where: {
+          id: data.environmentId,
+        },
+      });
+    }
 
     const aesKey = this.utilsService.decryptWithPrivateKey(body.encryptionKey);
 
@@ -208,6 +221,7 @@ export class EnvironmentsService {
         },
         blobUrl: envBlobUrl,
         version: newVersion,
+        changelog: body.changelog,
       },
     });
 
@@ -268,7 +282,10 @@ export class EnvironmentsService {
     });
 
     if (!env)
-      throw new ConflictException('Oops! environment file does not exist');
+      return {
+        success: false,
+        message: 'Environment file not found',
+      };
 
     const envBlob = await this.utilsService.fetchEnvBlob(env.blobUrl);
     const encryptedEnvString = envBlob.toString('utf-8');
@@ -299,6 +316,63 @@ export class EnvironmentsService {
       message: 'Environment keys fetched successfully',
       data: {
         envKeys: Object.keys(envObj.data.envObj),
+      },
+    };
+  }
+
+  async getProjectEnvironmentBySlug(
+    userId: string,
+    projectId: string,
+    envSlug: string,
+  ) {
+    const hasProjectAccess = await this.projectService.verifyUserProjectAccess(
+      userId,
+      projectId,
+    );
+
+    if (!hasProjectAccess)
+      throw new ForbiddenException(
+        'Oops! you do not have access to this project',
+      );
+
+    const environment = await this.prisma.environment.findUnique({
+      where: {
+        projectId_slug: {
+          slug: this.utilsService.slugify(envSlug),
+          projectId,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        envs: {
+          select: {
+            version: true,
+            createdAt: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!environment) throw new NotFoundException('Environment not found');
+
+    return {
+      success: true,
+      message: 'Environment fetched successfully',
+      data: {
+        id: environment.id,
+        name: environment.name,
+        slug: environment.slug,
+        description: environment.description,
+        projectId: projectId,
+        latestVersion: environment.envs[0]?.version || 0,
+        lastUpdated: environment.envs[0]?.createdAt || null,
       },
     };
   }

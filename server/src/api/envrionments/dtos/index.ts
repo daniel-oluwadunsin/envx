@@ -21,7 +21,11 @@ export class CreateEnvDto {
   @IsString(false)
   projectId?: string;
 
+  @IsString(false)
   encryptionKey?: string;
+
+  @IsString(true)
+  changelog?: string;
 }
 
 export class GetEnvDto {

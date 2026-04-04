@@ -10,8 +10,8 @@ AUTHENTICATION
 
 .eync -h “echo commands”
 
-- eync init - checks if there is a .eyncconfig file already
-- eync projects list, lists all project that you have
+- eync init - checks if there is a .eyncconfig file already ✅
+- eync projects list, lists all project that you have ✅
 - eync configure, lists all the projects that you have and you select the one you want
 - Eync push (env optional)
   - If environment doesn’t exist, ask “are you sure you want to create a new environment, select organization and create project, or set them in the .eyncconfig file”
@@ -21,6 +21,7 @@ AUTHENTICATION
   - if local_backup_before_pull is true: set the data of current .env to .env.backup and pull to update .env
 - Eync switch <environemnt> environment to switch to
 - Eync list - lists all environments
+- envx example
 
 Checks
 
