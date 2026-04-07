@@ -30,6 +30,8 @@ model User {
   signInCodes         SignInCodes[]
   projects            Projects[]
   envs                Envs[]
+
+  projectGitHostOrigins ProjectGitHostOrigin[]
 }
 
 model Organization {
@@ -99,7 +101,8 @@ model Projects {
   usesSeperateEnvironmentSecrets Boolean @default(false)
   usesActionSecrets              Boolean @default(false)
 
-  initOAuths InitOAuth[]
+  initOAuths            InitOAuth[]
+  projectGitHostOrigins ProjectGitHostOrigin[]
 }
 
 model InitOAuth {
@@ -192,6 +195,21 @@ model Envs {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ProjectGitHostOrigin {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId String   @db.ObjectId
+  project   Projects @relation(fields: [projectId], references: [id])
+  name      String
+  githost   String
+  url       String
+
+  createdAt    DateTime @default(now())
+  lastUpdated  DateTime @updatedAt
+  lastUsedAt   DateTime @updatedAt
+  lastUsedById String?  @db.ObjectId
+  lastUsedBy   User?    @relation(fields: [lastUsedById], references: [id])
 }
 
 enum UserRoles {

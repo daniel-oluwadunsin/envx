@@ -46,6 +46,10 @@ export class UtilsService {
       .replace(/-+/g, '-');
   }
 
+  isSlugified(text: string): boolean {
+    return this.slugify(text) === text;
+  }
+
   generateAesKey(): Buffer {
     return crypto.randomBytes(32);
   }
