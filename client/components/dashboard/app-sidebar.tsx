@@ -24,12 +24,13 @@ import {
 import { EnvXLogo, EnvXLogoIcon } from "@/components/envx-logo";
 import { useAuth } from "@/lib/providers/auth-context";
 import { useUserInfo } from "@/lib/hooks/use-user-info";
+import { useOrgProjectStore } from "@/lib/store/org-projects.store";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/org", label: "Organizations", icon: Building2 },
   { href: "/project", label: "Projects", icon: FolderKanban },
-  { href: "/project/prj_1/environments", label: "Environments", icon: Layers },
+  { is_environments: true, href: "", label: "Environments", icon: Layers },
   { href: "/dashboard/activity", label: "Activity Logs", icon: Activity },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
@@ -43,6 +44,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const pathname = usePathname();
   const { signOut } = useAuth();
   const { user } = useUserInfo();
+  const { selectedProject } = useOrgProjectStore();
 
   return (
     <aside
@@ -60,14 +62,24 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       <nav className="flex-1 overflow-y-auto px-2 py-3">
         <div className="space-y-1">
           {navItems.map((item) => {
+            if (item.is_environments) {
+              item.href = selectedProject
+                ? `/project/${selectedProject.id}/environments`
+                : "/project/";
+            }
+
             const isActive =
               pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              (item.href !== "/dashboard" &&
+                pathname.startsWith(item.href!) &&
+                !navItems.some(
+                  (i) => i.href !== item.href && pathname.startsWith(i.href!),
+                ));
 
             const link = (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.href!}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive

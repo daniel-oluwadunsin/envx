@@ -25,3 +25,14 @@ export const getProjects = async (organizationId?: string) => {
     errorHandler(e);
   }
 };
+
+export const getSingleProject = async (projectId: string) => {
+  try {
+    const response = await apiClient.get<ApiResponse<Project>>(
+      `/project/${projectId}`,
+    );
+    return response.data?.data;
+  } catch (e) {
+    errorHandler(e);
+  }
+};

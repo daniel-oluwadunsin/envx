@@ -32,6 +32,14 @@ export class ProjectController {
     return await this.projectService.getProjects(userId, organizationId);
   }
 
+  @Get(':projectId')
+  async getSingleProject(
+    @Auth('id') userId: string,
+    @Param('projectId', MongoIdPipe) projectId: string,
+  ) {
+    return await this.projectService.getSingleProject(userId, projectId);
+  }
+
   @Post('oauth/initiate')
   async initiateOAuth(
     @Body() body: InitiateProjectOAuthDto,

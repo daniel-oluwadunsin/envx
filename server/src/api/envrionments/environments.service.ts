@@ -5,7 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
-import { CreateEnvDto, CreateEnvironmentDto, GetEnvDto } from './dtos';
+import {
+  CreateEnvDto,
+  CreateEnvironmentDto,
+  GetEnvDto,
+  GetEnvVersionDto,
+  RestoreEnvVersionDto,
+} from './dtos';
 import { ProjectService } from '../project/project.service';
 import { UtilsService } from 'src/shared/services/utils.service';
 import { UploadService } from 'src/shared/services/upload.service';
@@ -319,11 +325,139 @@ export class EnvironmentsService {
   async getEnvKeys(userId: string, body: GetEnvDto) {
     const envObj = await this.getEnvFile(userId, body);
 
+    if (!envObj.data) throw new NotFoundException('Environment file not found');
+
     return {
       success: true,
       message: 'Environment keys fetched successfully',
       data: {
-        envKeys: Object.keys(envObj.data.envObj),
+        envKeys: Object.keys(envObj.data?.envObj),
+      },
+    };
+  }
+
+  async getEnvValue(userId: string, body: GetEnvDto & { key: string }) {
+    const envObj = await this.getEnvFile(userId, body);
+
+    if (!envObj.data) throw new NotFoundException('Environment file not found');
+
+    const value = envObj.data.envObj[body.key];
+
+    if (value === undefined) {
+      return {
+        success: false,
+        message: 'Key not found in environment',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Environment value fetched successfully',
+      data: {
+        value,
+      },
+    };
+  }
+
+  async getEnvVersions(userId: string, body: GetEnvVersionDto) {
+    const hasProjectAccess = await this.projectService.verifyUserProjectAccess(
+      userId,
+      body.projectId,
+    );
+
+    if (!hasProjectAccess)
+      throw new ForbiddenException(
+        'Oops! you do not have access to this project',
+      );
+
+    const environment = await this.prisma.environment.findUnique({
+      where: {
+        projectId_slug: {
+          slug: body.envSlug,
+          projectId: body.projectId,
+        },
+      },
+    });
+
+    if (!environment)
+      throw new ConflictException('Oops! environment does not exist');
+
+    const versions = await this.prisma.envs.findMany({
+      where: {
+        environmentId: environment.id,
+      },
+      select: {
+        id: true,
+        version: true,
+        createdAt: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        changelog: true,
+      },
+      orderBy: {
+        version: 'desc',
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Environment versions fetched successfully',
+      data: versions,
+    };
+  }
+
+  async restoreEnvVersion(userId: string, body: RestoreEnvVersionDto) {
+    const envVersion = await this.prisma.envs.findFirst({
+      where: {
+        environment: {
+          slug: body.envSlug,
+          projectId: body.projectId,
+        },
+        version: body.version,
+      },
+      include: {
+        environment: true,
+      },
+    });
+
+    if (!envVersion)
+      throw new NotFoundException('Environment version not found');
+
+    const newVersion = envVersion.version + 1;
+
+    const newEnv = await this.prisma.envs.create({
+      data: {
+        environment: {
+          connect: {
+            id: envVersion.environmentId,
+          },
+        },
+        project: {
+          connect: {
+            id: body.projectId,
+          },
+        },
+        createdBy: {
+          connect: {
+            id: userId,
+          },
+        },
+        blobUrl: envVersion.blobUrl,
+        version: newVersion,
+        changelog: `Restored version ${body.version}`,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Environment version restored successfully',
+      data: {
+        envId: newEnv.id,
+        version: newEnv.version,
       },
     };
   }

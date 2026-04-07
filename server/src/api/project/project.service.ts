@@ -327,6 +327,39 @@ export class ProjectService {
     };
   }
 
+  async getSingleProject(userId: string, projectId: string) {
+    const project = await this.prisma.projects.findFirst({
+      where: {
+        id: projectId,
+        userProjectAccesses: {
+          some: {
+            userId,
+          },
+        },
+      },
+      include: {
+        organization: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return {
+      success: true,
+      message: 'Project retrieved successfully',
+      data: {
+        id: project.id,
+        name: project.name,
+        orgId: project.organizationId,
+        orgName: project.organization.name,
+        lastUpdated: project.updatedAt,
+        description: project.description,
+      },
+    };
+  }
+
   async initProjectOAuth(userId: string, body: InitiateProjectOAuthDto) {
     const { projectId, provider } = body;
 

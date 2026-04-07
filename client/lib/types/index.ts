@@ -54,9 +54,12 @@ export interface EnvVariable {
 export interface EnvVersion {
   id: string;
   version: number;
-  createdBy: string;
-  createdAt: string;
-  changes: number;
+  createdAt: Date;
+  changelog?: string;
+  createdBy: {
+    name: string;
+    id: string;
+  };
 }
 
 export interface ActivityLog {

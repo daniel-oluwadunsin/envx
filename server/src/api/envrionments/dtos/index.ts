@@ -38,3 +38,25 @@ export class GetEnvDto {
   @IsNumber(true)
   version?: number;
 }
+
+export class RestoreEnvVersionDto {
+  @IsString(false)
+  envSlug: string;
+
+  @IsString(false)
+  projectId?: string;
+
+  @IsNumber(false)
+  version: number;
+
+  @IsString(true)
+  changelog?: string;
+}
+
+export class GetEnvVersionDto {
+  @IsString(false)
+  envSlug: string;
+
+  @IsString(false)
+  projectId?: string;
+}

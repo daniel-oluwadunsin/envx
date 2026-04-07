@@ -20,6 +20,7 @@ import { readFileSync } from 'fs';
 import { GithubProvider } from 'src/shared/providers/oauth/github.provider';
 import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
 import { KmsService } from 'src/shared/services/kms.service';
+import { OAuthProvider } from 'src/shared/types/oauth';
 
 @Injectable()
 export class AuthService {
