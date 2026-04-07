@@ -19,6 +19,7 @@ import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
 import { GithubProvider } from 'src/shared/providers/oauth/github.provider';
 import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
+import { KmsService } from 'src/shared/services/kms.service';
 
 @Injectable()
 export class AuthService {
@@ -30,25 +31,41 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly githubProvider: GithubProvider,
     private readonly gitlabProvider: GitlabProvider,
+    private readonly kmsService: KmsService,
   ) {}
 
-  private async generateUserKey(): Promise<string> {
-    let key: string;
-    let exists = true;
+  private async generateUserKey() {
+    const userKey = this.utilsService.generateAesKey().toString('base64');
 
-    while (exists) {
-      key = crypto.randomBytes(32).toString('base64');
+    const cmsKeyId = process.env.AWS_ENVX_USERS_MASTER_KEY_ID!;
 
-      const existingUser = await this.prisma.user.findFirst({
-        where: { encryptionKey: key },
-      });
+    const { plaintextKey, encryptedKeyBase64 } =
+      await this.kmsService.generateDataKey(cmsKeyId);
 
-      if (!existingUser) {
-        exists = false;
-      }
-    }
+    const encryptedUserKey = this.utilsService.encrypt(userKey, plaintextKey);
 
-    return key;
+    return {
+      userEncryptionKey: JSON.stringify(encryptedUserKey),
+      userEncryptedKey: encryptedKeyBase64,
+    };
+  }
+
+  async decryptUserKey({
+    userKmsEncryptedKey,
+    userEncryptionKey,
+  }: {
+    userKmsEncryptedKey: string;
+    userEncryptionKey: string;
+  }) {
+    const decryptedCmkKey =
+      await this.kmsService.decryptDataKey(userKmsEncryptedKey);
+
+    const decryptedUserKey = this.utilsService.decrypt(
+      JSON.parse(userEncryptionKey),
+      decryptedCmkKey,
+    );
+
+    return decryptedUserKey;
   }
 
   private async generateCliSignInCode(): Promise<string> {
@@ -128,13 +145,15 @@ export class AuthService {
       throw new BadRequestException('User with this email already exists');
     }
 
-    const userKey = await this.generateUserKey();
+    const { userEncryptedKey, userEncryptionKey } =
+      await this.generateUserKey();
 
     const user = await this.prisma.user.create({
       data: {
         email: email.toLowerCase(),
         name,
-        encryptionKey: userKey,
+        encryptionKey: userEncryptionKey,
+        kmsEncryptedKey: userEncryptedKey,
       },
     });
 
@@ -347,8 +366,6 @@ export class AuthService {
       },
     });
 
-    console.log(user);
-
     if (!user) {
       return {
         success: true,
@@ -395,7 +412,7 @@ export class AuthService {
 
     const token = await this.generateToken(userId);
 
-    const session = await this.prisma.session.create({
+    await this.prisma.session.create({
       data: {
         userId,
         accessToken: token,

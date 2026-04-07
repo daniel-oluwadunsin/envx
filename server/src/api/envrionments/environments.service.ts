@@ -142,6 +142,7 @@ export class EnvironmentsService {
       },
       select: {
         projectKey: true,
+        kmsEncryptedKey: true,
       },
     });
 
@@ -177,9 +178,12 @@ export class EnvironmentsService {
 
     const envString = JSON.stringify(envObject);
 
+    const decryptedProjectKey =
+      await this.projectService.decryptProjectKey(project);
+
     const encryptedEnv = this.utilsService.encrypt(
       envString,
-      project.projectKey,
+      decryptedProjectKey,
     );
 
     const envBlob = Buffer.from(JSON.stringify(encryptedEnv), 'utf-8');
@@ -266,6 +270,7 @@ export class EnvironmentsService {
       },
       select: {
         projectKey: true,
+        kmsEncryptedKey: true,
       },
     });
 
@@ -291,9 +296,12 @@ export class EnvironmentsService {
     const encryptedEnvString = envBlob.toString('utf-8');
     const encryptedEnvObj = JSON.parse(encryptedEnvString);
 
+    const decryptedProjectKey =
+      await this.projectService.decryptProjectKey(project);
+
     const decryptedEnvString = this.utilsService.decrypt(
       encryptedEnvObj,
-      project.projectKey,
+      decryptedProjectKey,
     );
 
     const decryptedEnvObj = JSON.parse(decryptedEnvString);

@@ -20,7 +20,8 @@ import { OAuthCallbackDto } from 'src/shared/interfaces';
 import { GithubProvider } from 'src/shared/providers/oauth/github.provider';
 import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from 'generated/prisma/client';
+import { Prisma, Projects } from 'generated/prisma/client';
+import { KmsService } from 'src/shared/services/kms.service';
 
 @Injectable()
 export class ProjectService {
@@ -34,9 +35,25 @@ export class ProjectService {
     private readonly configService: ConfigService,
     private readonly githubProvider: GithubProvider,
     private readonly gitlabProvider: GitlabProvider,
+    private readonly kmsService: KmsService,
     @Inject(REDIS_PROVIDER) private readonly redis: Redis,
   ) {
     this.logger = new Logger(ProjectService.name);
+  }
+
+  async decryptProjectKey(
+    project: Pick<Projects, 'kmsEncryptedKey' | 'projectKey'>,
+  ) {
+    const plaintextProjectKey = await this.kmsService.decryptDataKey(
+      project.kmsEncryptedKey!,
+    );
+
+    const decryptedProjectKey = this.utilService.decrypt(
+      JSON.parse(project.projectKey),
+      plaintextProjectKey,
+    );
+
+    return decryptedProjectKey;
   }
 
   async verifyUserProjectAccess(
@@ -50,6 +67,7 @@ export class ProjectService {
         },
         select: {
           encryptionKey: true,
+          kmsEncryptedKey: true,
         },
       });
 
@@ -67,6 +85,7 @@ export class ProjectService {
           project: {
             select: {
               projectKey: true,
+              kmsEncryptedKey: true,
             },
           },
         },
@@ -76,18 +95,40 @@ export class ProjectService {
 
       const accessKey = access.encryptedKey;
       const userEncryptionKey = user.encryptionKey;
+      const userKmsEncryptedKey = user.kmsEncryptedKey;
       const projectKey = access.project.projectKey;
+      const projectKmsEncryptedKey = access.project.kmsEncryptedKey;
 
-      if ([accessKey, userEncryptionKey, projectKey].some((key) => !key))
+      if (
+        [
+          accessKey,
+          userEncryptionKey,
+          userKmsEncryptedKey,
+          projectKey,
+          projectKmsEncryptedKey,
+        ].some((key) => !key)
+      )
         return false;
 
       try {
-        const decryptedProjectKey = this.utilService.decrypt(
-          JSON.parse(accessKey),
+        const decryptedUserKey = await this.authService.decryptUserKey({
+          userKmsEncryptedKey,
           userEncryptionKey,
+        });
+
+        const decryptedProjectKey = await this.decryptProjectKey({
+          kmsEncryptedKey: projectKmsEncryptedKey!,
+          projectKey: projectKey,
+        });
+
+        const decryptedAccessKey = this.utilService.decrypt(
+          JSON.parse(accessKey),
+          decryptedUserKey,
         );
 
-        if (decryptedProjectKey != projectKey) return false;
+        if (decryptedAccessKey !== decryptedProjectKey) {
+          return false;
+        }
 
         return true;
       } catch (error) {
@@ -110,23 +151,24 @@ export class ProjectService {
     return access;
   }
 
-  private async generateProjectKey(): Promise<string> {
-    let key: string;
-    let exists = true;
+  private async generateProjectKey() {
+    const projectKey = this.utilService.generateAesKey().toString('base64');
 
-    while (exists) {
-      key = crypto.randomBytes(32).toString('base64');
+    const projectMasterKeyId = await this.kmsService.generateCmkKey();
 
-      const existingProject = await this.prisma.projects.findUnique({
-        where: { projectKey: key },
-      });
+    const { encryptedKeyBase64, plaintextKey } =
+      await this.kmsService.generateDataKey(projectMasterKeyId);
 
-      if (!existingProject) {
-        exists = false;
-      }
-    }
+    const encryptedProjectKey = this.utilService.encrypt(
+      projectKey,
+      plaintextKey,
+    );
 
-    return key;
+    return {
+      encryptedProjectKey: JSON.stringify(encryptedProjectKey),
+      encryptedKmsKey: encryptedKeyBase64,
+      masterKeyId: projectMasterKeyId,
+    };
   }
 
   async createProject(userId: string, body: CreateProjectDto) {
@@ -145,14 +187,17 @@ export class ProjectService {
       );
     }
 
-    const projectKey = await this.generateProjectKey();
+    const { encryptedKmsKey, encryptedProjectKey, masterKeyId } =
+      await this.generateProjectKey();
 
     const project = await this.prisma.projects.create({
       data: {
         organization: { connect: { id: organizationId } },
         createdBy: { connect: { id: userId } },
         name,
-        projectKey,
+        projectKey: encryptedProjectKey,
+        kmsEncryptedKey: encryptedKmsKey,
+        masterKeyId: masterKeyId,
         description,
       },
       select: {
@@ -172,16 +217,24 @@ export class ProjectService {
     });
 
     const users = await this.prisma.organizationMembers.findMany({
-      where: { organizationId },
+      where: { organizationId, userId: { not: userId } },
       select: { userId: true },
     });
 
     const usersIds = users.map((u) => u.userId);
 
-    this.eventEmitter.emit(EventNames.PopulateProjectAccess, {
+    // call twice (need to await for current user)
+    await this.handlePopulateProjectAccessEvent({
       projectId: project.id,
-      usersIds,
-    } satisfies PopulateProjectAccess);
+      usersIds: [userId],
+    });
+
+    if (users.length) {
+      this.eventEmitter.emit(EventNames.PopulateProjectAccess, {
+        projectId: project.id,
+        usersIds,
+      } satisfies PopulateProjectAccess);
+    }
 
     return {
       success: true,
@@ -395,15 +448,33 @@ export class ProjectService {
 
     const users = await this.prisma.user.findMany({
       where: { id: { in: usersIds } },
-      select: { id: true, encryptionKey: true },
+      select: { id: true, encryptionKey: true, kmsEncryptedKey: true },
     });
 
     const data = await Promise.all(
       users.map(async (user) => {
         try {
+          const plaintextKey = await this.kmsService.decryptDataKey(
+            user.kmsEncryptedKey!,
+          );
+
+          const decryptedUserKey = this.utilService.decrypt(
+            JSON.parse(user.encryptionKey),
+            plaintextKey,
+          );
+
+          const plaintextProjectKey = await this.kmsService.decryptDataKey(
+            project.kmsEncryptedKey!,
+          );
+
+          const decryptedProjectKey = this.utilService.decrypt(
+            JSON.parse(project.projectKey),
+            plaintextProjectKey,
+          );
+
           const encryptedProjectKey = this.utilService.encrypt(
-            project.projectKey,
-            user.encryptionKey,
+            decryptedProjectKey,
+            decryptedUserKey,
           );
 
           const encryptedProjectKeyString = JSON.stringify(encryptedProjectKey);

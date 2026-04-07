@@ -26,7 +26,7 @@ export class EncryptionInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
-    if (request.headers['X-Encrypted-Request'] === 'true') {
+    if (request.headers['x-encrypted-request'] === 'true') {
       if (request.body && !isEmpty(request.body)) {
         const decryptedBody = this.decryptRequestBody(request);
         request.body = JSON.parse(decryptedBody);

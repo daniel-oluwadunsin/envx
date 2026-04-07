@@ -53,7 +53,7 @@ export class UtilsService {
   // AES-GCM encryption
   encrypt(
     text: string | Buffer,
-    key: Buffer | string,
+    key: Buffer | Uint8Array | string,
   ): { iv: string; data: string; authTag: string } {
     key = typeof key === 'string' ? Buffer.from(key, 'base64') : key;
     const iv = crypto.randomBytes(12);
@@ -76,7 +76,7 @@ export class UtilsService {
 
   decrypt(
     encrypted: { iv: string; data: string; authTag: string },
-    key: Buffer | string,
+    key: Buffer | Uint8Array | string,
   ): string {
     key = typeof key === 'string' ? Buffer.from(key, 'base64') : key;
     const iv = Buffer.from(encrypted.iv, 'base64');

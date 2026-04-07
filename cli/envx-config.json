@@ -1,9 +1,9 @@
 {
-  "projectId": "69cfcd02657a721e7f254a24",
-  "currentEnvVersion": 2,
-  "environment": "dunsin-branch",
+  "projectId": "69d47cded923b7e0ed8a5c92",
+  "currentEnvVersion": 1,
+  "environment": "default",
   "localBackupBeforePull": true,
-  "localBackupPath": ".env.backup",
+  "localBackupPath": ".env.local",
   "envFilePath": ".env",
   "alwaysOverrideEnvFile": false
 }

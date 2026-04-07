@@ -23,6 +23,7 @@ model User {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   encryptionKey       String?
+  kmsEncryptedKey     String?
   userProjectAccesses UserProjectAccess[]
   organizations       Organization[]
   organizationMembers OrganizationMembers[]
@@ -74,7 +75,9 @@ model Projects {
   description         String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  projectKey          String              @unique
+  projectKey          String
+  masterKeyId         String
+  kmsEncryptedKey     String
   userProjectAccesses UserProjectAccess[]
   organizationId      String              @db.ObjectId
   organization        Organization        @relation(fields: [organizationId], references: [id])

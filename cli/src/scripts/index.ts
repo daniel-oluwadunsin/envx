@@ -17,16 +17,21 @@ const logger = new Logger("scripts");
 const addFileToGitIgnore = async (fileName: string) => {
   const gitignorePath = path.join(process.cwd(), ".gitignore");
 
-  if (fs.existsSync(gitignorePath)) {
-    const gitignoreContent = await fsp.readFile(gitignorePath, "utf-8");
-    if (!gitignoreContent.includes(fileName)) {
-      await fsp.appendFile(gitignorePath, `\n${fileName}\n`, {
-        encoding: "utf-8",
-      });
-      logger.info(
-        `Added ${fileName} to .gitignore to prevent it from being committed.`,
-      );
-    }
+  if (!fs.existsSync(gitignorePath)) {
+    console.log(".gitignore file does not exist.");
+    return;
+  }
+
+  const gitignoreContent = await fsp.readFile(gitignorePath, "utf-8");
+  const lines = gitignoreContent.split(/\r?\n/).map((line) => line.trim());
+
+  // Only check for an exact match
+  const exists = lines.includes(fileName);
+
+  if (!exists) {
+    await fsp.appendFile(gitignorePath, `\n${fileName}\n`, {
+      encoding: "utf-8",
+    });
   }
 };
 
@@ -116,5 +121,6 @@ export const createEnvFile = async (params: CreateEnvFileParams) => {
     });
   }
 
+  await addFileToGitIgnore(path.basename(envFilePath));
   logger.success(`Env file created at ${envFilePath}`);
 };

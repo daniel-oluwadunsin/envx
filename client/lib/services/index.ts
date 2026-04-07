@@ -87,6 +87,8 @@ apiClient.interceptors.request.use(async (config) => {
   config.headers[RESPONSE_BODY_PUBLIC_KEY_ENCRYPTION_KEY_HEADER] =
     JSON.stringify(encryptedPublicKeyForResponse);
 
+  config.headers["x-encrypted-request"] = "true";
+
   rsaStore.setKey({
     publicKey,
     privateKey,
