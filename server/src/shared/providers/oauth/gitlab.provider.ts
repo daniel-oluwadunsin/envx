@@ -1,7 +1,8 @@
 import { ConfigService } from '@nestjs/config';
-import { OAuthProviderInterface } from '../../interfaces/oauth-provider';
+import { OAuthProviderInterface } from './oauth-provider.interface';
 import axios, { Axios } from 'axios';
 import * as qs from 'qs';
+import { GetHttpInstanceProps, TokenResponse } from 'src/shared/types/oauth';
 
 export class GitlabProvider implements OAuthProviderInterface {
   readonly provider = 'gitlab';
@@ -73,5 +74,65 @@ export class GitlabProvider implements OAuthProviderInterface {
     }
 
     return { accessToken: response.data.access_token, refreshToken, expiresAt };
+  }
+
+  async refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
+    const tokenUrl = 'https://gitlab.com/oauth/token';
+    const clientId = process.env['GITLAB_APP_ID'];
+    const clientSecret = process.env['GITLAB_CLIENT_SECRET'];
+
+    const requestBody = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    };
+
+    const response = await axios.post<{
+      access_token: string;
+      refresh_token?: string;
+      expires_in?: number;
+    }>(tokenUrl, qs.stringify(requestBody), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const accessToken = response.data.access_token;
+    const newRefreshToken = response.data.refresh_token;
+    const expiresIn = response.data.expires_in;
+
+    const expiresAt = expiresIn
+      ? new Date(Date.now() + expiresIn * 1000)
+      : undefined;
+
+    if (!accessToken) {
+      throw new Error('Failed to refresh access token from GitLab');
+    }
+
+    return { accessToken, refreshToken: newRefreshToken, expiresAt };
+  }
+
+  async getHttpInstance(props: GetHttpInstanceProps): Promise<Axios> {
+    const expiresAt = props.expiresAt ? new Date(props.expiresAt) : null;
+
+    if (expiresAt && expiresAt.getTime() < Date.now()) {
+      const { accessToken } = await this.refreshAccessToken(
+        props.refreshToken!,
+      );
+
+      props.updateAccessToken?.(accessToken, expiresAt);
+
+      props.accessToken = accessToken;
+      props.expiresAt = expiresAt;
+    }
+
+    return axios.create({
+      baseURL: this.baseUrl,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${props.accessToken}`,
+      },
+    });
   }
 }

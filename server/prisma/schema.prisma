@@ -198,12 +198,18 @@ model Envs {
 }
 
 model ProjectGitHostOrigin {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  projectId String   @db.ObjectId
-  project   Projects @relation(fields: [projectId], references: [id])
-  name      String
-  githost   String
-  url       String
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId       String   @db.ObjectId
+  project         Projects @relation(fields: [projectId], references: [id])
+  name            String
+  githost         String
+  url             String
+  repoName        String?
+  repoDescription String?
+  repoUrl         String?
+  repoId          String?
+  repoFullPath    String?
+  private         Boolean  @default(false)
 
   createdAt    DateTime @default(now())
   lastUpdated  DateTime @updatedAt

@@ -1,5 +1,6 @@
-import { IsMongoId } from 'class-validator';
+import { IsBoolean, IsMongoId } from 'class-validator';
 import { IsString } from 'src/shared/decorators';
+import { OAuthProvider } from 'src/shared/types/oauth';
 
 export class CreateProjectDto {
   @IsString(false)
@@ -20,4 +21,16 @@ export class InitiateProjectOAuthDto {
 
   @IsString(false)
   provider: OAuthProvider;
+}
+
+export class LogOutProjectOAuthDto {
+  @IsString(false)
+  @IsMongoId()
+  projectId: string;
+
+  @IsString(false)
+  provider: OAuthProvider;
+
+  @IsBoolean()
+  removeOrigins: boolean;
 }

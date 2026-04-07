@@ -2324,6 +2324,13 @@
     "@types/http-errors" "*"
     "@types/node" "*"
 
+"@types/sodium-native@^2.3.9":
+  version "2.3.9"
+  resolved "https://registry.npmjs.org/@types/sodium-native/-/sodium-native-2.3.9.tgz"
+  integrity sha512-jZIg5ltGH1okmnH3FrLQsgwjcjOVozMSHwSiEm1/LpMekhOMHbQqp21P4H24mizh1BjwI6Q8qmphmD/HJuAqWg==
+  dependencies:
+    "@types/node" "*"
+
 "@types/stack-utils@^2.0.3":
   version "2.0.3"
   resolved "https://registry.npmjs.org/@types/stack-utils/-/stack-utils-2.0.3.tgz"
@@ -2858,6 +2865,11 @@ axios@^1.13.6:
     form-data "^4.0.5"
     proxy-from-env "^1.1.0"
 
+b4a@^1.6.4:
+  version "1.8.0"
+  resolved "https://registry.npmjs.org/b4a/-/b4a-1.8.0.tgz"
+  integrity sha512-qRuSmNSkGQaHwNbM7J78Wwy+ghLEYF1zNrSeMxj4Kgw6y33O3mXcQ6Ie9fRvfU/YnxWkOchPXbaLb73TkIsfdg==
+
 "babel-jest@^29.0.0 || ^30.0.0", babel-jest@30.2.0:
   version "30.2.0"
   resolved "https://registry.npmjs.org/babel-jest/-/babel-jest-30.2.0.tgz"
@@ -2934,6 +2946,66 @@ balanced-match@^4.0.2:
   version "4.0.4"
   resolved "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz"
   integrity sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==
+
+bare-addon-resolve@^1.3.0:
+  version "1.10.0"
+  resolved "https://registry.npmjs.org/bare-addon-resolve/-/bare-addon-resolve-1.10.0.tgz"
+  integrity sha512-sSd0jieRJlDaODOzj0oe0RjFVC1QI0ZIjGIdPkbrTXsdVVtENg14c+lHHAhHwmWCZ2nQlMhy8jA3Y5LYPc/isA==
+  dependencies:
+    bare-module-resolve "^1.10.0"
+    bare-semver "^1.0.0"
+
+bare-ansi-escapes@^2.1.0:
+  version "2.2.3"
+  resolved "https://registry.npmjs.org/bare-ansi-escapes/-/bare-ansi-escapes-2.2.3.tgz"
+  integrity sha512-02ES4/E2RbrtZSnHJ9LntBhYkLA6lPpSEeP8iqS3MccBIVhVBlEmruF1I7HZqx5Q8aiTeYfQVeqmrU9YO2yYoQ==
+  dependencies:
+    bare-stream "^2.6.5"
+
+bare-assert@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.npmjs.org/bare-assert/-/bare-assert-1.2.0.tgz"
+  integrity sha512-c6uvgvTJBspTDxtVnPgrBKmLgcpW3Fp72NVKDLg6oT4QjQbhGtvrkHMhGYMK1sh4vjBHOBmuUalyt9hSzV37fQ==
+  dependencies:
+    bare-inspect "^3.1.2"
+
+bare-events@*, bare-events@^2.7.0:
+  version "2.8.2"
+  resolved "https://registry.npmjs.org/bare-events/-/bare-events-2.8.2.tgz"
+  integrity sha512-riJjyv1/mHLIPX4RwiK+oW9/4c3TEUeORHKefKAKnZ5kyslbN+HXowtbaVEqt4IMUB7OXlfixcs6gsFeo/jhiQ==
+
+bare-inspect@^3.1.2:
+  version "3.1.4"
+  resolved "https://registry.npmjs.org/bare-inspect/-/bare-inspect-3.1.4.tgz"
+  integrity sha512-jfW5KRA84o3REpI6Vr4nbvMn+hqVAw8GU1mMdRwUsY5yJovQamxYeKGVKGqdzs+8ZbG4jRzGUXP/3Ji/DnqfPg==
+  dependencies:
+    bare-ansi-escapes "^2.1.0"
+    bare-type "^1.0.0"
+
+bare-module-resolve@^1.10.0:
+  version "1.12.1"
+  resolved "https://registry.npmjs.org/bare-module-resolve/-/bare-module-resolve-1.12.1.tgz"
+  integrity sha512-hbmAPyFpEq8FoZMd5sFO3u6MC5feluWoGE8YKlA8fCrl6mNtx68Wjg4DTiDJcqRJaovTvOYKfYngoBUnbaT7eg==
+  dependencies:
+    bare-semver "^1.0.0"
+
+bare-semver@^1.0.0:
+  version "1.0.2"
+  resolved "https://registry.npmjs.org/bare-semver/-/bare-semver-1.0.2.tgz"
+  integrity sha512-ESVaN2nzWhcI5tf3Zzcq9aqCZ676VWzqw07eEZ0qxAcEOAFYBa0pWq8sK34OQeHLY3JsfKXZS9mDyzyxGjeLzA==
+
+bare-stream@^2.6.5:
+  version "2.12.0"
+  resolved "https://registry.npmjs.org/bare-stream/-/bare-stream-2.12.0.tgz"
+  integrity sha512-w28i8lkBgREV3rPXGbgK+BO66q+ZpKqRWrZLiCdmmUlLPrQ45CzkvRhN+7lnv00Gpi2zy5naRxnUFAxCECDm9g==
+  dependencies:
+    streamx "^2.25.0"
+    teex "^1.0.1"
+
+bare-type@^1.0.0:
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/bare-type/-/bare-type-1.1.0.tgz"
+  integrity sha512-LdtnnEEYldOc87Dr4GpsKnStStZk3zfgoEMXy8yvEZkXrcCv9RtYDrUYWFsBQHtaB0s1EUWmcvS6XmEZYIj3Bw==
 
 base64-js@^1.3.0, base64-js@^1.3.1:
   version "1.5.1"
@@ -4065,6 +4137,13 @@ eventemitter2@6.4.9:
   resolved "https://registry.npmjs.org/eventemitter2/-/eventemitter2-6.4.9.tgz"
   integrity sha512-JEPTiaOt9f04oa6NOkc4aH+nVp5I3wEjpHbIPqfgCdD5v5bUzy7xQqwcVO2aDQgOWhI28da57HksMrzK9HlRxg==
 
+events-universal@^1.0.0:
+  version "1.0.1"
+  resolved "https://registry.npmjs.org/events-universal/-/events-universal-1.0.1.tgz"
+  integrity sha512-LUd5euvbMLpwOF8m6ivPCbhQeSiYVNb8Vs0fQ8QjXo0JTkEHpz8pxdQf0gStltaPpw0Cca8b39KxvK9cfKRiAw==
+  dependencies:
+    bare-events "^2.7.0"
+
 events@^3.2.0:
   version "3.3.0"
   resolved "https://registry.npmjs.org/events/-/events-3.3.0.tgz"
@@ -4180,6 +4259,11 @@ fast-diff@^1.1.2:
   version "1.3.0"
   resolved "https://registry.npmjs.org/fast-diff/-/fast-diff-1.3.0.tgz"
   integrity sha512-VxPP4NqbUjj6MaAOafWeUn2cXWLcCtljklUtZf0Ind4XQ+QPtmA0b18zZy0jIQx+ExRVCR/ZQpBmik5lXshNsw==
+
+fast-fifo@^1.3.2:
+  version "1.3.2"
+  resolved "https://registry.npmjs.org/fast-fifo/-/fast-fifo-1.3.2.tgz"
+  integrity sha512-/d9sfos4yxzpwkDkuN7k2SqFKtYNmCTzgfEpz82x34IM9/zc8KGxQoXg1liNC/izpRM/MBdt44Nmx41ZWqk+FQ==
 
 fast-json-stable-stringify@^2.0.0, fast-json-stable-stringify@^2.1.0, fast-json-stable-stringify@2.x:
   version "2.1.0"
@@ -7122,6 +7206,13 @@ relateurl@^0.2.7:
   resolved "https://registry.npmjs.org/relateurl/-/relateurl-0.2.7.tgz"
   integrity sha512-G08Dxvm4iDN3MLM0EsP62EDV9IuhXPR6blNz6Utcp7zyV3tr4HVNINt6MpaRWbxoOHT3Q7YN2P+jaHX8vUbgog==
 
+require-addon@^1.1.0:
+  version "1.2.0"
+  resolved "https://registry.npmjs.org/require-addon/-/require-addon-1.2.0.tgz"
+  integrity sha512-VNPDZlYgIYQwWp9jMTzljx+k0ZtatKlcvOhktZ/anNPI3dQ9NXk7cq2U4iJ1wd9IrytRnYhyEocFWbkdPb+MYA==
+  dependencies:
+    bare-addon-resolve "^1.3.0"
+
 require-directory@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/require-directory/-/require-directory-2.1.1.tgz"
@@ -7391,6 +7482,15 @@ slick@^1.12.2:
   resolved "https://registry.npmjs.org/slick/-/slick-1.12.2.tgz"
   integrity sha512-4qdtOGcBjral6YIBCWJ0ljFSKNLz9KkhbWtuGvUyRowl1kxfuE1x/Z/aJcaiilpb3do9bl5K7/1h9XC5wWpY/A==
 
+sodium-native@^5.1.0:
+  version "5.1.0"
+  resolved "https://registry.npmjs.org/sodium-native/-/sodium-native-5.1.0.tgz"
+  integrity sha512-3RxgyWyJlhTsABPnJVpCI5CoTDANZTqqFrEPqr+kjfnRaBihpVtMUE3yTF40ukdoB1APXeoBNKF3MzZAIHg39g==
+  dependencies:
+    bare-assert "^1.2.0"
+    require-addon "^1.1.0"
+    which-runtime "^1.2.1"
+
 source-map-support@^0.5.21, source-map-support@~0.5.20:
   version "0.5.21"
   resolved "https://registry.npmjs.org/source-map-support/-/source-map-support-0.5.21.tgz"
@@ -7465,6 +7565,15 @@ streamsearch@^1.1.0:
   version "1.1.0"
   resolved "https://registry.npmjs.org/streamsearch/-/streamsearch-1.1.0.tgz"
   integrity sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==
+
+streamx@^2.12.5, streamx@^2.25.0:
+  version "2.25.0"
+  resolved "https://registry.npmjs.org/streamx/-/streamx-2.25.0.tgz"
+  integrity sha512-0nQuG6jf1w+wddNEEXCF4nTg3LtufWINB5eFEN+5TNZW7KWJp6x87+JFL43vaAUPyCfH1wID+mNVyW6OHtFamg==
+  dependencies:
+    events-universal "^1.0.0"
+    fast-fifo "^1.3.2"
+    text-decoder "^1.1.0"
 
 string_decoder@^1.1.1:
   version "1.3.0"
@@ -7670,6 +7779,13 @@ teeny-request@^9.0.0:
     stream-events "^1.0.5"
     uuid "^9.0.0"
 
+teex@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.npmjs.org/teex/-/teex-1.0.1.tgz"
+  integrity sha512-eYE6iEI62Ni1H8oIa7KlDU6uQBtqr4Eajni3wX7rpfXD8ysFx8z0+dri+KWEPWpBsxXfxu58x/0jvTVT1ekOSg==
+  dependencies:
+    streamx "^2.12.5"
+
 terser-webpack-plugin@^5.3.16:
   version "5.3.16"
   resolved "https://registry.npmjs.org/terser-webpack-plugin/-/terser-webpack-plugin-5.3.16.tgz"
@@ -7699,6 +7815,13 @@ test-exclude@^6.0.0:
     "@istanbuljs/schema" "^0.1.2"
     glob "^7.1.4"
     minimatch "^3.0.4"
+
+text-decoder@^1.1.0:
+  version "1.2.7"
+  resolved "https://registry.npmjs.org/text-decoder/-/text-decoder-1.2.7.tgz"
+  integrity sha512-vlLytXkeP4xvEq2otHeJfSQIRyWxo/oZGEbXrtEEF9Hnmrdly59sUbzZ/QgyWuLYHctCHxFF4tRQZNQ9k60ExQ==
+  dependencies:
+    b4a "^1.6.4"
 
 tinyexec@^1.0.2:
   version "1.0.2"
@@ -8112,6 +8235,11 @@ whatwg-url@^5.0.0:
   dependencies:
     tr46 "~0.0.3"
     webidl-conversions "^3.0.0"
+
+which-runtime@^1.2.1:
+  version "1.3.2"
+  resolved "https://registry.npmjs.org/which-runtime/-/which-runtime-1.3.2.tgz"
+  integrity sha512-5kwCfWml7+b2NO7KrLMhYihjRx0teKkd3yGp1Xk5Vaf2JGdSh+rgVhEALAD9c/59dP+YwJHXoEO7e8QPy7gOkw==
 
 which@^1.2.9:
   version "1.3.1"

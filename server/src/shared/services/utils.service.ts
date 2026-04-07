@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { generateKeyPairSync } from 'crypto';
+import * as sodium from 'sodium-native';
 
 @Injectable()
 export class UtilsService {
@@ -184,6 +185,18 @@ export class UtilsService {
     });
 
     return { publicKey, privateKey };
+  }
+
+  encryptLibSodium(secret: string, keyBase64: string): string {
+    const publicKey = Buffer.from(keyBase64, 'base64');
+
+    const message = Buffer.from(secret);
+
+    const cipher = Buffer.alloc(message.length + sodium.crypto_box_SEALBYTES);
+
+    sodium.crypto_box_seal(cipher, message, publicKey);
+
+    return cipher.toString('base64');
   }
 
   parseEnv(envContent: string): Record<string, string> {

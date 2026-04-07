@@ -5,7 +5,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
-import { CreateProjectDto, InitiateProjectOAuthDto } from './dtos';
+import {
+  CreateProjectDto,
+  InitiateProjectOAuthDto,
+  LogOutProjectOAuthDto,
+} from './dtos';
 import * as crypto from 'crypto';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { CacheKeys, EventNames } from 'src/shared/enums';
@@ -428,6 +432,81 @@ export class ProjectService {
       data: {
         hasOAuth,
       },
+    };
+  }
+
+  async logOutProjectOAuth(userId: string, body: LogOutProjectOAuthDto) {
+    const { projectId, provider, removeOrigins } = body;
+
+    const hasAccess = await this.verifyUserProjectAccess(userId, projectId);
+
+    if (!hasAccess) {
+      throw new BadRequestException("You don't have access to this project");
+    }
+
+    const updateData: Prisma.ProjectsUpdateInput =
+      provider === 'github'
+        ? {
+            githubToken: null,
+            githubOAuthCompletedAt: null,
+            githubRefreshToken: null,
+            githubTokenExpiresAt: null,
+          }
+        : {
+            gitlabToken: null,
+            gitlabOAuthCompletedAt: null,
+            gitlabRefreshToken: null,
+            gitlabTokenExpiresAt: null,
+          };
+
+    await this.prisma.projects.update({
+      where: { id: projectId },
+      data: updateData,
+    });
+
+    if (removeOrigins) {
+      await this.prisma.projectGitHostOrigin.deleteMany({
+        where: { projectId, githost: provider },
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Logged out of OAuth successfully',
+    };
+  }
+
+  async checkConfiguredProjectOAuth(projectId: string) {
+    const project = await this.prisma.projects.findUnique({
+      where: { id: projectId },
+      select: {
+        githubToken: true,
+        gitlabToken: true,
+      },
+    });
+
+    const configuredOAuths = [];
+    if (project.githubToken) configuredOAuths.push('github');
+    if (project.gitlabToken) configuredOAuths.push('gitlab');
+
+    return {
+      success: true,
+      message: 'Configured OAuth providers retrieved successfully',
+      data: {
+        configuredOAuths,
+      },
+    };
+  }
+
+  async getProjectOAuthOrigins(projectId: string, provider?: string) {
+    const githostOrigins = await this.prisma.projectGitHostOrigin.findMany({
+      where: { projectId, ...(provider ? { githost: provider } : {}) },
+    });
+
+    return {
+      success: true,
+      message: 'Git host origins retrieved successfully',
+      data: githostOrigins,
     };
   }
 
