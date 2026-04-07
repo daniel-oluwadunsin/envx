@@ -12,3 +12,12 @@ export class CreateProjectDto {
   @IsString(true)
   description?: string;
 }
+
+export class InitiateProjectOAuthDto {
+  @IsString(false)
+  @IsMongoId()
+  projectId: string;
+
+  @IsString(false)
+  provider: OAuthProvider;
+}

@@ -5,15 +5,22 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
-import { CreateProjectDto } from './dtos';
+import { CreateProjectDto, InitiateProjectOAuthDto } from './dtos';
 import * as crypto from 'crypto';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { CacheKeys, EventNames } from 'src/shared/enums';
 import { DeleteUserProjectAccess, PopulateProjectAccess } from './interfaces';
 import { UtilsService } from 'src/shared/services/utils.service';
-import { UserProjectRoles } from 'generated/prisma/enums';
+import { InitOAuthStatus, UserProjectRoles } from 'generated/prisma/enums';
 import { REDIS_PROVIDER } from 'src/shared/providers/redis.provider';
 import { Redis } from 'ioredis';
+import { AuthService } from '../auth/auth.service';
+import { add } from 'date-fns';
+import { OAuthCallbackDto } from 'src/shared/interfaces';
+import { GithubProvider } from 'src/shared/providers/oauth/github.provider';
+import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from 'generated/prisma/client';
 
 @Injectable()
 export class ProjectService {
@@ -22,7 +29,11 @@ export class ProjectService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly authService: AuthService,
     private readonly utilService: UtilsService,
+    private readonly configService: ConfigService,
+    private readonly githubProvider: GithubProvider,
+    private readonly gitlabProvider: GitlabProvider,
     @Inject(REDIS_PROVIDER) private readonly redis: Redis,
   ) {
     this.logger = new Logger(ProjectService.name);
@@ -212,6 +223,158 @@ export class ProjectService {
       success: true,
       message: 'Projects retrieved successfully',
       data,
+    };
+  }
+
+  async initProjectOAuth(userId: string, body: InitiateProjectOAuthDto) {
+    const { projectId, provider } = body;
+
+    const hasAccess = await this.verifyUserProjectAccess(userId, projectId);
+
+    if (!hasAccess) {
+      throw new BadRequestException("You don't have access to this project");
+    }
+
+    const project = await this.prisma.projects.findUnique({
+      where: { id: projectId },
+      select: { githubToken: true, gitlabToken: true },
+    });
+
+    if (project.githubToken && provider === 'github') {
+      throw new BadRequestException(
+        'GitHub OAuth has already been completed for this project, run `envx githost github logout` to remove this token.',
+      );
+    }
+
+    if (project.gitlabToken && provider === 'gitlab') {
+      throw new BadRequestException(
+        'GitLab OAuth has already been completed for this project, run `envx githost gitlab logout` to remove this token.',
+      );
+    }
+
+    const state = crypto.randomBytes(16).toString('hex');
+
+    const expiresAt = add(new Date(), { minutes: 10 });
+
+    const { url, redirectUrl } = await this.authService.initOAuthSignIn(
+      provider,
+      state,
+    );
+
+    await this.prisma.initOAuth.create({
+      data: {
+        project: { connect: { id: projectId } },
+        provider,
+        state,
+        expiresAt,
+        redirectUrl,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'OAuth initiated',
+      data: {
+        url,
+        state,
+      },
+    };
+  }
+
+  async handleProjectOAuthCallback(body: OAuthCallbackDto) {
+    const initOAuth = await this.prisma.initOAuth.findFirst({
+      where: {
+        provider: body.provider,
+        state: body.state,
+        status: { not: InitOAuthStatus.Expired },
+      },
+      include: {
+        project: true,
+      },
+    });
+
+    if (!initOAuth) {
+      throw new BadRequestException('Invalid or expired OAuth state');
+    }
+
+    if (initOAuth.status != InitOAuthStatus.Pending) {
+      throw new BadRequestException(
+        'This OAuth flow has already been completed or expired',
+      );
+    }
+
+    if (initOAuth.expiresAt < new Date()) {
+      await this.prisma.initOAuth.update({
+        where: { id: initOAuth.id },
+        data: { status: InitOAuthStatus.Expired },
+      });
+
+      throw new BadRequestException('OAuth state has expired');
+    }
+
+    await this.prisma.initOAuth.update({
+      where: { id: initOAuth.id },
+      data: { status: InitOAuthStatus.Completed },
+    });
+
+    const { accessToken, refreshToken, expiresAt } =
+      body.provider === 'github'
+        ? await this.githubProvider.exchangeCodeForToken(
+            body.code,
+            initOAuth.redirectUrl,
+          )
+        : await this.gitlabProvider.exchangeCodeForToken(
+            body.code,
+            initOAuth.redirectUrl,
+          );
+
+    const updateData: Prisma.ProjectsUpdateInput =
+      body.provider === 'github'
+        ? {
+            githubToken: accessToken,
+            githubOAuthCompletedAt: new Date(),
+            githubRefreshToken: refreshToken,
+            githubTokenExpiresAt: expiresAt,
+          }
+        : {
+            gitlabToken: accessToken,
+            gitlabOAuthCompletedAt: new Date(),
+            gitlabTokenExpiresAt: expiresAt,
+            gitlabRefreshToken: refreshToken,
+          };
+
+    await this.prisma.projects.update({
+      where: { id: initOAuth.projectId },
+      data: updateData,
+    });
+
+    await this.prisma.initOAuth.delete({
+      where: { id: initOAuth.id },
+    });
+
+    const redirectUrl = `${this.configService.get('FRONTEND_URL')}/oauth?oauth_status=success`;
+
+    return redirectUrl;
+  }
+
+  async verifyProjectOAuth(projectId: string, provider: string) {
+    const project = await this.prisma.projects.findUnique({
+      where: { id: projectId },
+      select: {
+        githubToken: true,
+        gitlabToken: true,
+      },
+    });
+
+    const hasOAuth =
+      provider === 'github' ? !!project.githubToken : !!project.gitlabToken;
+
+    return {
+      success: true,
+      message: 'OAuth status retrieved successfully',
+      data: {
+        hasOAuth,
+      },
     };
   }
 

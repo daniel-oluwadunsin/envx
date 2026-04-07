@@ -258,4 +258,15 @@ export class UtilsService {
 
     return Buffer.from(response.data);
   }
+
+  async addQueryParamsToUrl(
+    url: string,
+    params: Record<string, string | number | boolean>,
+  ): Promise<string> {
+    const urlObj = new URL(url);
+    for (const [key, value] of Object.entries(params)) {
+      urlObj.searchParams.set(key, String(value));
+    }
+    return urlObj.toString();
+  }
 }

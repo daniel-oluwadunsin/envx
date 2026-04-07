@@ -26,26 +26,30 @@ export class EncryptionInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
-    if (request.body && !isEmpty(request.body)) {
-      const decryptedBody = this.decryptRequestBody(request);
-      request.body = JSON.parse(decryptedBody);
+    if (request.headers['X-Encrypted-Request'] === 'true') {
+      if (request.body && !isEmpty(request.body)) {
+        const decryptedBody = this.decryptRequestBody(request);
+        request.body = JSON.parse(decryptedBody);
+      }
+
+      return next.handle().pipe(
+        map(async (responseBody) => {
+          if (responseBody) {
+            const { encryptedResponseBody, encryptedAesKeyForResponse } =
+              await this.encryptResponseBody(request, responseBody);
+
+            response.setHeader(
+              RESPONSE_BODY_ENCRYPTION_KEY_HEADER,
+              encryptedAesKeyForResponse,
+            );
+
+            return encryptedResponseBody;
+          }
+        }),
+      );
+    } else {
+      return next.handle();
     }
-
-    return next.handle().pipe(
-      map(async (responseBody) => {
-        if (responseBody) {
-          const { encryptedResponseBody, encryptedAesKeyForResponse } =
-            await this.encryptResponseBody(request, responseBody);
-
-          response.setHeader(
-            RESPONSE_BODY_ENCRYPTION_KEY_HEADER,
-            encryptedAesKeyForResponse,
-          );
-
-          return encryptedResponseBody;
-        }
-      }),
-    );
   }
 
   decryptRequestBody(request: Request): any {

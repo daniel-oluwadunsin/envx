@@ -340,8 +340,6 @@ export class OrganizationService {
     });
 
     const data = memberships.map((m) => {
-      delete m.organization.githubToken;
-      delete m.organization.gitlabToken;
       const { _count, ...organization } = m.organization;
       return {
         ...organization,

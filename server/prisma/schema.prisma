@@ -32,11 +32,9 @@ model User {
 }
 
 model Organization {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  githubToken String?
-  gitlabToken String?
-  ownerId     String  @db.ObjectId
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  name    String
+  ownerId String @db.ObjectId
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,6 +82,35 @@ model Projects {
   createdBy           User                @relation(fields: [createdById], references: [id])
   environments        Environment[]
   envs                Envs[]
+
+  githubToken            String?
+  githubOAuthCompletedAt DateTime?
+  githubTokenExpiresAt   DateTime?
+  githubRefreshToken     String?
+
+  gitlabToken            String?
+  gitlabOAuthCompletedAt DateTime?
+  gitlabTokenExpiresAt   DateTime?
+  gitlabRefreshToken     String?
+
+  usesSeperateEnvironmentSecrets Boolean @default(false)
+  usesActionSecrets              Boolean @default(false)
+
+  initOAuths InitOAuth[]
+}
+
+model InitOAuth {
+  id          String          @id @default(auto()) @map("_id") @db.ObjectId
+  projectId   String          @db.ObjectId
+  provider    String
+  state       String
+  project     Projects        @relation(fields: [projectId], references: [id])
+  expiresAt   DateTime
+  status      InitOAuthStatus @default(Pending)
+  redirectUrl String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserProjectAccess {
@@ -174,6 +201,12 @@ enum UserProjectRoles {
 }
 
 enum CliSignInStatus {
+  Pending
+  Completed
+  Expired
+}
+
+enum InitOAuthStatus {
   Pending
   Completed
   Expired

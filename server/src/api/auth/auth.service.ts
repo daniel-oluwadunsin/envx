@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  NotImplementedException,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../database/database.service';
@@ -16,6 +17,8 @@ import { CliSignInStatus } from 'generated/prisma/enums';
 import { Prisma } from 'generated/prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
+import { GithubProvider } from 'src/shared/providers/oauth/github.provider';
+import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +28,8 @@ export class AuthService {
     private readonly utilsService: UtilsService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly githubProvider: GithubProvider,
+    private readonly gitlabProvider: GitlabProvider,
   ) {}
 
   private async generateUserKey(): Promise<string> {
@@ -323,8 +328,6 @@ export class AuthService {
       },
     });
 
-    console.log(session);
-
     if (!session) {
       return {
         success: true,
@@ -420,5 +423,29 @@ export class AuthService {
         publicKey,
       },
     };
+  }
+
+  async initOAuthSignIn(provider: OAuthProvider, state: string) {
+    const baseRedirectUrl =
+      provider === 'github'
+        ? this.configService.get<string>('GITHUB_REDIRECT_URI')
+        : this.configService.get<string>('GITLAB_REDIRECT_URI');
+
+    const redirectUrl = baseRedirectUrl;
+
+    let url = undefined;
+
+    switch (provider.toLowerCase()) {
+      case 'github':
+        url = this.githubProvider.getOAuthUrl(state, redirectUrl);
+        break;
+      case 'gitlab':
+        url = this.gitlabProvider.getOAuthUrl(state, redirectUrl);
+        break;
+    }
+
+    if (!url) throw new NotImplementedException('Provider not implemeted');
+
+    return { url, redirectUrl };
   }
 }
