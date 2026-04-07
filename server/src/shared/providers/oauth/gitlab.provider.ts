@@ -2,7 +2,20 @@ import { ConfigService } from '@nestjs/config';
 import { OAuthProviderInterface } from './oauth-provider.interface';
 import axios, { Axios } from 'axios';
 import * as qs from 'qs';
-import { GetHttpInstanceProps, TokenResponse } from 'src/shared/types/oauth';
+import {
+  CreateEnvironmentRequest,
+  CreateSecretRequest,
+  GetEnvironmentsRequest,
+  GetEnvironmentsResponse,
+  GetHttpInstanceProps,
+  GetRepoRequest,
+  GetRepoResponse,
+  GetSecretsRequest,
+  GetSecretsResponse,
+  GitlabCICDVariable,
+  GitlabRepo,
+  TokenResponse,
+} from 'src/shared/types/oauth';
 
 export class GitlabProvider implements OAuthProviderInterface {
   readonly provider = 'gitlab';
@@ -34,7 +47,6 @@ export class GitlabProvider implements OAuthProviderInterface {
 
   async exchangeCodeForToken(
     code: string,
-    state: string,
     redirectUrl?: string,
   ): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: Date }> {
     const tokenUrl = 'https://gitlab.com/oauth/token';
@@ -134,5 +146,102 @@ export class GitlabProvider implements OAuthProviderInterface {
         Authorization: `Bearer ${props.accessToken}`,
       },
     });
+  }
+
+  async getRepo(props: GetRepoRequest): Promise<GetRepoResponse> {
+    const http = await this.getHttpInstance(props);
+
+    const response = await http.get<GitlabRepo>(
+      `/projects/${encodeURIComponent(props.repoFullPath)}`,
+    );
+
+    return {
+      id: response.data.id,
+      repoName: response.data.name,
+      repoFullPath: response.data.path_with_namespace,
+      private: response.data.visibility !== 'public',
+      repoDescription: response.data.description,
+      repoUrl: response.data.web_url,
+    };
+  }
+
+  async getRepoEnvironments(
+    props: GetEnvironmentsRequest,
+  ): Promise<GetEnvironmentsResponse[]> {
+    const http = await this.getHttpInstance(props);
+
+    const response = await http.get<
+      { id: number; name: string; created_at: string; updated_at: string }[]
+    >(`/projects/${encodeURIComponent(props.repoFullPath)}/environments`);
+
+    return response.data.map((env) => ({
+      id: env.id,
+      name: env.name,
+      createdAt: new Date(env.created_at),
+      updatedAt: new Date(env.updated_at),
+    }));
+  }
+
+  async createEnvironment(
+    props: CreateEnvironmentRequest,
+  ): Promise<GetEnvironmentsResponse> {
+    const http = await this.getHttpInstance(props);
+
+    const response = await http.post<GitlabRepo>(
+      `/projects/${encodeURIComponent(props.repoFullPath)}/environments`,
+      {
+        name: props.name,
+      },
+    );
+
+    return {
+      id: response.data.id,
+      name: response.data.name,
+      createdAt: new Date(response.data.created_at),
+      updatedAt: new Date(response.data.updated_at),
+    };
+  }
+
+  async createSecret(props: CreateSecretRequest): Promise<void> {
+    const http = await this.getHttpInstance(props);
+
+    await http.post<GitlabCICDVariable>(
+      `/projects/${encodeURIComponent(props.repoFullPath)}/variables`,
+      {
+        key: props.name,
+        value: props.value,
+        protected: false,
+        masked: true,
+        environment_scope: props.envrionmentName || '*',
+      },
+    );
+
+    return;
+  }
+
+  async getSecrets(props: GetSecretsRequest): Promise<GetSecretsResponse[]> {
+    const http = await this.getHttpInstance(props);
+
+    const response = await http.get<GitlabCICDVariable[]>(
+      `/projects/${encodeURIComponent(props.repoFullPath)}/variables`,
+    );
+
+    return response.data
+      .filter((variable) =>
+        props.environmentName
+          ? variable.environment_scope?.toLowerCase() ===
+            props.environmentName.toLowerCase()
+          : true,
+      )
+      .map((variable) => ({
+        name: variable.key,
+        value: variable.value,
+        protected: variable.protected,
+        masked: variable.masked,
+        createdAt: new Date(variable.created_at),
+        updatedAt: new Date(variable.updated_at),
+        environment_scope: variable.environment_scope,
+        description: variable.description,
+      }));
   }
 }

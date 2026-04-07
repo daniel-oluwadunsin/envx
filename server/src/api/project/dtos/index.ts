@@ -34,3 +34,15 @@ export class LogOutProjectOAuthDto {
   @IsBoolean()
   removeOrigins: boolean;
 }
+
+export class CreateProjectGitHostOriginDto {
+  @IsString(false)
+  @IsMongoId()
+  projectId: string;
+
+  @IsString(false)
+  hostName: string;
+
+  @IsString(false)
+  hostUrl: string;
+}

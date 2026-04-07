@@ -3,10 +3,12 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/database.service';
 import {
   CreateProjectDto,
+  CreateProjectGitHostOriginDto,
   InitiateProjectOAuthDto,
   LogOutProjectOAuthDto,
 } from './dtos';
@@ -26,6 +28,7 @@ import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, Projects } from 'generated/prisma/client';
 import { KmsService } from 'src/shared/services/kms.service';
+import { MakeOAuthRequest, OAuthProvider } from 'src/shared/types/oauth';
 
 @Injectable()
 export class ProjectService {
@@ -43,6 +46,47 @@ export class ProjectService {
     @Inject(REDIS_PROVIDER) private readonly redis: Redis,
   ) {
     this.logger = new Logger(ProjectService.name);
+  }
+
+  async getProjectGitHostTokens(
+    projectId: string,
+    provider: OAuthProvider,
+  ): Promise<MakeOAuthRequest> {
+    const project = await this.prisma.projects.findUnique({
+      where: {
+        id: projectId,
+      },
+    });
+
+    if (!project) throw new NotFoundException('Project not found');
+    if (provider === 'github' && !project.githubToken)
+      throw new NotFoundException('Github not configured.');
+
+    if (provider === 'gitlab' && !project.gitlabToken)
+      throw new NotFoundException('Gitlab not configured');
+
+    return provider === 'github'
+      ? {
+          accessToken: project.githubToken,
+          expiresAt: project.githubTokenExpiresAt,
+          refreshToken: project.githubRefreshToken,
+        }
+      : {
+          accessToken: project.gitlabToken,
+          refreshToken: project.gitlabRefreshToken,
+          expiresAt: project.gitlabTokenExpiresAt,
+          updateAccessToken: async (accessToken, expiresAt) => {
+            await this.prisma.projects.update({
+              where: {
+                id: projectId,
+              },
+              data: {
+                gitlabToken: accessToken,
+                gitlabTokenExpiresAt: expiresAt,
+              },
+            });
+          },
+        };
   }
 
   async decryptProjectKey(
@@ -414,7 +458,17 @@ export class ProjectService {
     return redirectUrl;
   }
 
-  async verifyProjectOAuth(projectId: string, provider: string) {
+  async verifyProjectOAuth(
+    userId: string,
+    projectId: string,
+    provider: string,
+  ) {
+    const hasAccess = await this.verifyUserProjectAccess(userId, projectId);
+
+    if (!hasAccess) {
+      throw new BadRequestException("You don't have access to this project");
+    }
+
     const project = await this.prisma.projects.findUnique({
       where: { id: projectId },
       select: {
@@ -476,7 +530,13 @@ export class ProjectService {
     };
   }
 
-  async checkConfiguredProjectOAuth(projectId: string) {
+  async checkConfiguredProjectOAuth(userId: string, projectId: string) {
+    const hasAccess = await this.verifyUserProjectAccess(userId, projectId);
+
+    if (!hasAccess) {
+      throw new BadRequestException("You don't have access to this project");
+    }
+
     const project = await this.prisma.projects.findUnique({
       where: { id: projectId },
       select: {
@@ -498,7 +558,17 @@ export class ProjectService {
     };
   }
 
-  async getProjectOAuthOrigins(projectId: string, provider?: string) {
+  async getProjectGitHostOrigins(
+    userId: string,
+    projectId: string,
+    provider?: string,
+  ) {
+    const hasAccess = await this.verifyUserProjectAccess(userId, projectId);
+
+    if (!hasAccess) {
+      throw new BadRequestException("You don't have access to this project");
+    }
+
     const githostOrigins = await this.prisma.projectGitHostOrigin.findMany({
       where: { projectId, ...(provider ? { githost: provider } : {}) },
     });
@@ -507,6 +577,86 @@ export class ProjectService {
       success: true,
       message: 'Git host origins retrieved successfully',
       data: githostOrigins,
+    };
+  }
+
+  async createProjectGitHostOrigins(
+    userId: string,
+    body: CreateProjectGitHostOriginDto,
+  ) {
+    const { projectId, hostName, hostUrl } = body;
+
+    if (!this.utilService.isSlugified(hostName)) {
+      throw new BadRequestException(
+        'Host name must be slugified (lowercase, no spaces, special characters allowed are hyphens and underscores)',
+      );
+    }
+
+    if (!this.utilService.isValidUrl(hostUrl)) {
+      throw new BadRequestException('Invalid host URL');
+    }
+
+    const hasAccess = await this.verifyUserProjectAccess(userId, projectId);
+
+    if (!hasAccess) {
+      throw new BadRequestException("You don't have access to this project");
+    }
+
+    const { platform, repoPath } = this.utilService.getGitHostInfo(hostUrl);
+
+    if (!['github', 'gitlab'].includes(platform)) {
+      throw new BadRequestException('Only GitHub and GitLab are supported');
+    }
+
+    const existingOrigin = await this.prisma.projectGitHostOrigin.findFirst({
+      where: {
+        projectId,
+        name: hostName,
+      },
+    });
+
+    if (existingOrigin) {
+      throw new BadRequestException(
+        'A git host with this name already exists for this project',
+      );
+    }
+
+    const requestTokens: MakeOAuthRequest = await this.getProjectGitHostTokens(
+      projectId,
+      platform,
+    );
+
+    const repoInfo =
+      platform === 'github'
+        ? await this.githubProvider.getRepo({
+            ...requestTokens,
+            repoFullPath: repoPath,
+          })
+        : await this.gitlabProvider.getRepo({
+            ...requestTokens,
+            repoFullPath: repoPath,
+          });
+
+    await this.prisma.projectGitHostOrigin.create({
+      data: {
+        project: { connect: { id: projectId } },
+        lastUsedBy: { connect: { id: userId } },
+        githost: platform,
+        name: hostName,
+        url: hostUrl,
+        repoName: repoInfo.repoName,
+        repoFullPath: repoInfo.repoFullPath,
+        repoDescription: repoInfo.repoDescription,
+        repoId: String(repoInfo.id),
+        repoUrl: repoInfo.repoUrl,
+        private: repoInfo.private,
+        createdAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Git host origin added successfully',
     };
   }
 

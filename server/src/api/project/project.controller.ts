@@ -1,9 +1,16 @@
-import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
 import { ProjectService } from './project.service';
-import { CreateProjectDto, InitiateProjectOAuthDto } from './dtos';
+import {
+  CreateProjectDto,
+  CreateProjectGitHostOriginDto,
+  InitiateProjectOAuthDto,
+  LogOutProjectOAuthDto,
+} from './dtos';
 import { Auth, IsPublic } from 'src/shared/decorators/auth.decorators';
 import { OAuthCallbackDto } from 'src/shared/interfaces';
 import { Response } from 'express';
+import { MongoIdPipe } from 'src/core/pipes';
+import { OAuthProvider } from 'src/shared/types/oauth';
 
 @Controller('project')
 export class ProjectController {
@@ -47,9 +54,54 @@ export class ProjectController {
 
   @Get('oauth/verify')
   async verifyOAuth(
+    @Auth('id') userId: string,
     @Query('projectId') projectId: string,
     @Query('provider') provider: string,
   ) {
-    return await this.projectService.verifyProjectOAuth(projectId, provider);
+    return await this.projectService.verifyProjectOAuth(
+      userId,
+      projectId,
+      provider,
+    );
+  }
+
+  @Post('oauth/remove')
+  async removeOAuth(
+    @Auth('id') userId: string,
+    @Body() body: LogOutProjectOAuthDto,
+  ) {
+    return await this.projectService.logOutProjectOAuth(userId, body);
+  }
+
+  @Get('oauth/providers')
+  async getOAuthProviders(
+    @Auth('id') userId: string,
+    @Query('projectId') projectId: string,
+  ) {
+    return await this.projectService.checkConfiguredProjectOAuth(
+      userId,
+      projectId,
+    );
+  }
+
+  @Get(':projectId/githost')
+  async getProjectGitHost(
+    @Auth('id') userId: string,
+    @Param('projectId', MongoIdPipe) projectId: string,
+    @Query('provider') provider: OAuthProvider,
+  ) {
+    return await this.projectService.getProjectGitHostOrigins(
+      userId,
+      projectId,
+      provider,
+    );
+  }
+
+  @Post('githost/create')
+  async createProjectGitHost(
+    @Auth('id') userId: string,
+    @Body() body: CreateProjectGitHostOriginDto,
+  ) {
+    return await this.projectService.createProjectGitHostOrigins(userId, body);
   }
 }

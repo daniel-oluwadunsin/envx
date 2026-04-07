@@ -2,7 +2,9 @@ export type OAuthProvider = 'github' | 'gitlab';
 
 export type OAuthTypes = 'project';
 
-type AltProjectRequestParams = { repoFullPath: string } & { projectId: number };
+type AltProjectRequestParams = { repoFullPath: string } & {
+  projectId?: number;
+};
 
 export type GithubRepo = {
   id: number;
@@ -18,7 +20,9 @@ export type GitlabRepo = {
   description: string;
   name: string;
   path: string;
+  path_with_namespace: string;
   created_at: Date;
+  updated_at: Date;
   web_url: string;
   visibility: 'private' | 'internal' | 'public';
 };

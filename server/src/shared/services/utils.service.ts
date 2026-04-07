@@ -4,6 +4,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { generateKeyPairSync } from 'crypto';
 import * as sodium from 'sodium-native';
+import { OAuthProvider } from '../types/oauth';
 
 @Injectable()
 export class UtilsService {
@@ -14,6 +15,15 @@ export class UtilsService {
     const base64Regex =
       /^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=)?$/;
     return base64Regex.test(str);
+  }
+
+  isValidUrl(str: string): boolean {
+    try {
+      new URL(str);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   base64ToPEM(base64Key: string): string {
@@ -285,5 +295,36 @@ export class UtilsService {
       urlObj.searchParams.set(key, String(value));
     }
     return urlObj.toString();
+  }
+
+  getGitHostInfo(url: string): {
+    platform: OAuthProvider;
+    owner: string;
+    repo: string;
+    repoPath: string;
+  } {
+    try {
+      const parsed = new URL(url);
+      const domain = parsed.hostname.toLowerCase();
+      const pathParts = parsed.pathname.split('/').filter(Boolean); // remove empty strings
+
+      let platform: 'github' | 'gitlab' | null = null;
+      if (domain === 'github.com') platform = 'github';
+      else if (domain === 'gitlab.com') platform = 'gitlab';
+      else platform = null;
+
+      if (!platform || pathParts.length < 2)
+        return { platform, owner: null, repo: null, repoPath: null };
+
+      const owner = pathParts[0];
+      const repo = pathParts[1].replace(/\.git$/, ''); // remove .git if present
+
+      const repoPath = `${owner}/${repo}`;
+
+      return { platform, owner, repo, repoPath };
+    } catch {
+      // Invalid URL
+      return { platform: null, owner: null, repo: null, repoPath: null };
+    }
   }
 }
