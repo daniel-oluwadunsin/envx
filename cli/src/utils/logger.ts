@@ -27,6 +27,10 @@ export default class Logger {
     return console.log(this.stringify(...messages));
   }
 
+  log(...messages: any) {
+    return console.log(this.stringify(...messages));
+  }
+
   warning(...messages: any) {
     console.log(chalk.yellowBright(this.stringify(...messages)));
   }

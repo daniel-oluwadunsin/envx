@@ -1,3 +1,5 @@
+import { GitHosts } from "../enums/githost.enum";
+
 export type ApiResponse<T> = {
   success: true;
   data: T;
@@ -34,6 +36,19 @@ export type CreateEnvDto = {
   changelog?: string;
 };
 
+export type InitiateOAuthResponse = {
+  url: string;
+  state: string;
+};
+
+export type CreateGitHostOriginDto = {
+  projectId: string;
+  hostName: string;
+  hostUrl: string;
+};
+
+// ======== ENTITY TYPES ========
+
 export type Project = {
   id: string;
   name: string;
@@ -67,4 +82,17 @@ export type Environment = {
 export type EnvFileRes = {
   envObj: Record<string, string>;
   version: number;
+};
+
+export type GitHostOrigin = {
+  id: string;
+  githost: GitHosts;
+  name: string;
+  url: string;
+  repoName: string;
+  repoFullPath: string;
+  repoDescription: string;
+  repoId: string;
+  private: boolean;
+  repoUrl: string;
 };

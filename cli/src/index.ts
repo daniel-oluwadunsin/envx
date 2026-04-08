@@ -4,6 +4,7 @@ import pkg from "../package.json";
 
 import "./commands";
 import "./hooks";
+import "./utils/cleanup";
 
 envxProgram
   .name("envx")

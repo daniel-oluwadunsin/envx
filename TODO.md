@@ -1,9 +1,9 @@
 - GITHUB AND GITLAB SECRETS UPDATE
 
-- envx githost [github/gitlab] authorize (if github has already been authorized for the project, ignore)
+- envx githost authorize [github/gitlab] (if github has already been authorized for the project, ignore)
   multiple hosts can be authorized, if used without command, tell which one has already been authorized
 
-- envx githost [gitlab/github] logout
+- envx githost logout [gitlab/github]
 
 - envx githost get-origins [github/gitlab]
 

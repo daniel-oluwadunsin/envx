@@ -3,6 +3,7 @@ import { CreateEnvxConfigFileParams } from "../types/script";
 import { CONFIG_FILE_NAME } from "../configs/const";
 import { existsSync } from "node:fs";
 import fsp from "fs/promises";
+import { GitHosts } from "../enums/githost.enum";
 
 export function parseEnv(envContent: string): Record<string, string> {
   const result: Record<string, string> = {};
@@ -145,4 +146,55 @@ export function parseEnvErrors(envContent: string) {
     return "Some fields are empty";
 
   return null;
+}
+
+export function parseError<T>(error: any): T {
+  const extractedError =
+    typeof error === "object" && "response" in error
+      ? error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message
+      : error;
+
+  return extractedError as T;
+}
+
+export function isValidUrl(urlString: string): boolean {
+  try {
+    new URL(urlString);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+export function parseGitHostInfo(url: string): {
+  platform: GitHosts;
+  owner: string;
+  repo: string;
+  repoPath: string;
+} {
+  try {
+    const parsed = new URL(url);
+    const domain = parsed.hostname.toLowerCase();
+    const pathParts = parsed.pathname.split("/").filter(Boolean); // remove empty strings
+
+    let platform: GitHosts | null = null;
+    if (domain === "github.com") platform = GitHosts.GitHub;
+    else if (domain === "gitlab.com") platform = GitHosts.GitLab;
+    else platform = null;
+
+    if (!platform || pathParts.length < 2)
+      return { platform, owner: null, repo: null, repoPath: null };
+
+    const owner = pathParts[0];
+    const repo = pathParts[1].replace(/\.git$/, ""); // remove .git if present
+
+    const repoPath = `${owner}/${repo}`;
+
+    return { platform, owner, repo, repoPath };
+  } catch {
+    // Invalid URL
+    return { platform: null, owner: null, repo: null, repoPath: null };
+  }
 }

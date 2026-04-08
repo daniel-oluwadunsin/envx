@@ -578,7 +578,7 @@ export class ProjectService {
       },
     });
 
-    const configuredOAuths = [];
+    const configuredOAuths: OAuthProvider[] = [];
     if (project.githubToken) configuredOAuths.push('github');
     if (project.gitlabToken) configuredOAuths.push('gitlab');
 

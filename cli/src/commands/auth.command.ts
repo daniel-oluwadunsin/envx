@@ -21,29 +21,18 @@ envxProgram
       const url = `${FRONTEND_URL}/cli?code=${cliCode}`;
 
       open(url);
-      logger.info(
+      logger.log(
         "A browser window has been opened for you to complete the login process. If it doesn't open, please open the following URL in your browser:",
-        url,
       );
+      logger.info(url);
 
-      logger.info("Waiting for authentication to complete...");
-      const startTime = Date.now();
-      let status: SignInStatus = "pending";
-      let authResponse: VerifyCliSignInResponse | null = null;
+      logger.log("Waiting for authentication to complete...");
 
-      // rewrite with setInterval for better performance and user experience
-      while (differenceInMilliseconds(new Date(), startTime) < AUTH_TIMEOUT) {
-        authResponse = await authService.verifyCliSignIn(cliCode);
-
-        status = authResponse.status;
-
-        if (status !== "pending") {
-          break;
-        }
-
-        // wait for 3 seconds before checking again
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
+      const { status, authResponse } = await authService.pollCliSignIn(
+        cliCode,
+        3000,
+        AUTH_TIMEOUT,
+      );
 
       if (status === "failed") {
         logger.error("Authentication failed, please try again.");

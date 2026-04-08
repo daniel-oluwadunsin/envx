@@ -41,17 +41,17 @@ organizationsCommand
   .command("list")
   .description("List organizations available to your account")
   .action(async () => {
-    logger.info("Fetching organizations...");
+    logger.log("Fetching organizations...");
 
     const orgs = await orgService.getOrgs();
 
     if (orgs.length === 0) {
-      logger.info("No organizations found.");
+      logger.warning("No organizations found.");
       process.exit(1);
     }
 
     orgs.forEach((org) => {
-      logger.info(`- ${org.name} (ID: ${org.id})`);
+      logger.log(`- ${org.name} (ID: ${org.id})`);
     });
   });
 
@@ -62,7 +62,7 @@ projectsCommand
   .action(async (_, options) => {
     const { organizationId, skipOrgs } = options;
 
-    logger.info("Fetching projects...");
+    logger.log("Fetching projects...");
 
     let organization = undefined;
 
@@ -72,13 +72,13 @@ projectsCommand
 
     const projects = await projectService.getProjects(organization);
     if (projects.length === 0) {
-      logger.info("No projects found.");
+      logger.warning("No projects found.");
       process.exit(1);
     }
 
     projects.forEach((project) => {
       // log with organization name and id and project id
-      logger.info(
+      logger.log(
         `- ${project.name} (ID: ${project.id}) - Organization: ${project.orgName} (ID: ${project.orgId})`,
       );
     });
@@ -89,7 +89,7 @@ environmentsCommand
   .description("List environments for a project")
   .option("-p --project <projectId>")
   .action(async (_, options) => {
-    logger.info("Fetching environments...");
+    logger.log("Fetching environments...");
 
     let { projectId } = options;
 
@@ -110,7 +110,7 @@ environmentsCommand
     const environments = await envService.getProjectEnvironments(projectId);
 
     if (environments.length === 0) {
-      logger.info("No environments found.");
+      logger.warning("No environments found.");
       process.exit(1);
     }
 
@@ -120,7 +120,7 @@ environmentsCommand
         env.slug.toLowerCase() !== env.name.toLowerCase()
           ? `${env.slug} (${env.name})`
           : env.slug;
-      logger.info(`- ${envDisplayName} (Latest Version: ${env.latestVersion})`);
+      logger.log(`- ${envDisplayName} (Latest Version: ${env.latestVersion})`);
     });
   });
 
@@ -130,7 +130,7 @@ environmentsCommand
   .option("-p --project <projectId>")
   .action(async (name, options) => {
     const { projectId } = options;
-    logger.info("Creating a new environment...");
+    logger.log("Creating a new environment...");
 
     const config = await getConfigFileContent();
     const targetProjectId = projectId || config.projectId;
@@ -197,7 +197,7 @@ envxProgram
     }
 
     if (targetProjectId && environment.toLowerCase() === config.environment) {
-      logger.info(`Already in environment: ${environment}`);
+      logger.warning(`Already in environment: ${environment}`);
       process.exit(1);
     }
 
@@ -291,7 +291,7 @@ envxProgram
   )
   .option("--no-override", "Do not override env file but merge it instead")
   .action(async (options) => {
-    logger.info("Pulling environment....");
+    logger.log("Pulling environment....");
     const config = await getConfigFileContent();
 
     const targetEnvironment = options.environment || config.environment;
@@ -411,7 +411,7 @@ envxProgram
     "Add a changelog message for this push",
   )
   .action(async (options) => {
-    logger.info("Pushing local .env file to the current environment...");
+    logger.log("Pushing local .env file to the current environment...");
 
     const config = await getConfigFileContent();
 
@@ -461,8 +461,6 @@ envxProgram
           message: `A newer version (${latestVersion}) is available. Pushing now will override those changes. You can pull first instead. Proceed with push?`,
           name: "confirmPush",
         });
-
-        console.log({ confirmPush: confirm.confirmPush });
 
         if (confirm.confirmPush != true) {
           logger.error("Push cancelled by user.");
