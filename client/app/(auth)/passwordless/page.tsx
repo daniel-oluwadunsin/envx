@@ -9,10 +9,10 @@ import { useUserStore } from "@/lib/store/user.store";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/dist/client/link";
 import { useSearchParams, redirect } from "next/navigation";
-import { useState } from "react";
+import { JSX, Suspense, useState } from "react";
 import { toast } from "sonner";
 
-const PasswordlessPage = () => {
+const PasswordlessPageContent = (): JSX.Element | null => {
   const [code, setCode] = useState("");
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
@@ -96,6 +96,14 @@ const PasswordlessPage = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+const PasswordlessPage = () => {
+  return (
+    <Suspense>
+      <PasswordlessPageContent />
+    </Suspense>
   );
 };
 

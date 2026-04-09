@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { JSX, Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   redirect,
@@ -17,7 +17,7 @@ import { useMutation } from "@tanstack/react-query";
 import { signIn } from "@/lib/services/auth.service";
 import { toast } from "sonner";
 
-export default function SignInPage() {
+export function SignInPageContent(): JSX.Element | null {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const searchParams = useSearchParams();
@@ -134,5 +134,13 @@ export default function SignInPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense>
+      <SignInPageContent />
+    </Suspense>
   );
 }

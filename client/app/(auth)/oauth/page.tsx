@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { JSX, Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { EnvXLogo } from "@/components/envx-logo";
@@ -9,9 +9,8 @@ import { CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
 
 type OAuthState = "success" | "error";
 
-export default function OAuthRedirectPage() {
+export function OAuthRedirectPageContent(): JSX.Element | null {
   const router = useRouter();
-  usePathname();
   const searchParams = useSearchParams();
   const oauthStatus = searchParams.get("oauth_status");
   const { user } = useUserInfo();
@@ -93,5 +92,13 @@ export default function OAuthRedirectPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OAuthRedirectPage() {
+  return (
+    <Suspense>
+      <OAuthRedirectPageContent />
+    </Suspense>
   );
 }

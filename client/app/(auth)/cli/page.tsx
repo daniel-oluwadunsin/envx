@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { JSX, Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,7 @@ import PulseLogo from "@/components/pulse-logo";
 
 type CLIState = "idle" | "loading" | "success" | "error";
 
-export default function CLIAuthPage() {
+export function CLIAuthPageContent(): JSX.Element | null {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [state, setState] = useState<CLIState>("idle");
@@ -69,7 +69,7 @@ export default function CLIAuthPage() {
 
   if (!user) {
     router.replace(`/signin?cliCode=${code || codeParams}`);
-    return;
+    return null;
   }
 
   return (
@@ -168,5 +168,13 @@ export default function CLIAuthPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CLIAuthPage() {
+  return (
+    <Suspense>
+      <CLIAuthPageContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { JSX, Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import PulseLogo from "@/components/pulse-logo";
 import { useUserInfo } from "@/lib/hooks/use-user-info";
 import { errorHandler } from "@/lib/utils";
 
-export default function InvitePage() {
+const InvitePageContent = (): JSX.Element | null => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const orgId = searchParams.get("orgId");
@@ -69,7 +69,8 @@ export default function InvitePage() {
   }
 
   if (!user) {
-    return router.replace(signInWithRedirectUrl);
+    router.replace(signInWithRedirectUrl);
+    return null;
   }
 
   if (!org || !inviteToken) {
@@ -194,5 +195,13 @@ export default function InvitePage() {
         </p>
       </div>
     </div>
+  );
+};
+
+export default function InvitePage() {
+  return (
+    <Suspense>
+      <InvitePageContent />
+    </Suspense>
   );
 }

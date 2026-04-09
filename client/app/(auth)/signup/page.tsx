@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { JSX, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ type Inputs = {
   cliCode?: string;
 };
 
-export default function SignUpPage() {
+export function SignUpPageContent(): JSX.Element | null {
   const router = useRouter();
   const { handleSubmit, control, watch, setValue } = useForm<Inputs>();
   const searchParams = useSearchParams();
@@ -186,5 +186,13 @@ export default function SignUpPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense>
+      <SignUpPageContent />
+    </Suspense>
   );
 }
