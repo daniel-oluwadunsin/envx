@@ -78,3 +78,18 @@ export interface Token {
   createdAt: string;
   prefix: string;
 }
+
+export type GitHostProvider = "github" | "gitlab";
+
+export interface GitHostOrigin {
+  id: string;
+  githost: GitHostProvider;
+  name: string;
+  repoUrl: string;
+  repoName?: string;
+  repoFullPath?: string;
+  repoDescription?: string;
+  repoId?: string;
+  private?: boolean;
+  url?: string;
+}

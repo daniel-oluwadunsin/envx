@@ -32,9 +32,19 @@ import {
   getProjectEnvironments,
 } from "@/lib/services/env.service";
 import { getSingleProject } from "@/lib/services/projects.service";
+import {
+  createProjectGitHostOrigin,
+  getConfiguredProjectGitHostProviders,
+  initiateProjectGitHostOAuth,
+  logoutProjectGitHostOAuth,
+  getProjectGitHostOrigins,
+  verifyProjectGitHostOAuth,
+} from "@/lib/services/githost.service";
+import { GitHostProvider } from "@/lib/types";
 import { queryClient } from "@/lib/providers/app-provider";
 import Loader from "@/components/ui/loader";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 type CreateEnvironmentInput = {
   name: string;
@@ -58,8 +68,25 @@ export default function EnvironmentsPage({
   params: Promise<{ id: string }>;
 }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isHostsOpen, setIsHostsOpen] = useState(false);
+  const [isAddOriginOpen, setIsAddOriginOpen] = useState(false);
+  const [logoutProvider, setLogoutProvider] = useState<GitHostProvider | null>(
+    null,
+  );
+  const [removeOrigins, setRemoveOrigins] = useState(false);
   const { control, handleSubmit, reset } = useForm<CreateEnvironmentInput>();
+  const {
+    control: addOriginControl,
+    handleSubmit: submitAddOrigin,
+    reset: resetAddOrigin,
+  } = useForm<{ originName: string; url: string }>({
+    defaultValues: {
+      originName: "",
+      url: "",
+    },
+  });
   const { id } = use(params);
+  const availableProviders: GitHostProvider[] = ["github", "gitlab"];
 
   const { data: project, isLoading: loadingProject } = useQuery({
     queryKey: ["project", id],
@@ -70,6 +97,81 @@ export default function EnvironmentsPage({
     useQuery({
       queryKey: ["project-environments", id],
       queryFn: () => getProjectEnvironments(id),
+    });
+
+  const { data: configuredProviders, isLoading: loadingProviders } = useQuery({
+    queryKey: ["project-githost-providers", id],
+    queryFn: () => getConfiguredProjectGitHostProviders(id),
+  });
+
+  const { data: projectOrigins, isLoading: loadingOrigins } = useQuery({
+    queryKey: ["project-githost-origins", id],
+    queryFn: () => getProjectGitHostOrigins(id),
+  });
+
+  const { mutateAsync: _authorizeProvider, isPending: authorizingProvider } =
+    useMutation({
+      mutationKey: ["authorize-project-githost", id],
+      mutationFn: async (provider: GitHostProvider) => {
+        const data = await initiateProjectGitHostOAuth(id, provider);
+        if (!data?.url) return false;
+
+        window.open(data.url, "_blank", "noopener,noreferrer");
+
+        const startedAt = Date.now();
+        const timeoutMs = 5 * 60 * 1000;
+        const intervalMs = 3000;
+
+        while (Date.now() - startedAt < timeoutMs) {
+          const verify = await verifyProjectGitHostOAuth(id, provider);
+          if (verify?.hasOAuth) {
+            return true;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
+
+        return false;
+      },
+      onSuccess(success, provider) {
+        if (success) {
+          toast.success(`Successfully authorized with ${provider}`);
+          queryClient.invalidateQueries({
+            queryKey: ["project-githost-providers", id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["project-githost-origins", id],
+          });
+          return;
+        }
+
+        toast.error(
+          `Authorization with ${provider} failed or timed out. Please try again.`,
+        );
+      },
+    });
+
+  const { mutateAsync: _logoutProvider, isPending: loggingOutProvider } =
+    useMutation({
+      mutationKey: ["logout-project-githost", id],
+      mutationFn: (provider: GitHostProvider) =>
+        logoutProjectGitHostOAuth(id, provider, removeOrigins),
+      onSuccess(success, provider) {
+        if (!success) {
+          toast.error(`Failed to remove authorization with ${provider}`);
+          return;
+        }
+
+        toast.success(`Successfully removed authorization with ${provider}`);
+        setLogoutProvider(null);
+        setRemoveOrigins(false);
+        queryClient.invalidateQueries({
+          queryKey: ["project-githost-providers", id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["project-githost-origins", id],
+        });
+      },
     });
 
   const { mutateAsync: _createEnvironment, isPending: creatingEnvironment } =
@@ -89,10 +191,101 @@ export default function EnvironmentsPage({
       },
     });
 
+  const { mutateAsync: _createOrigin, isPending: creatingOrigin } = useMutation(
+    {
+      mutationKey: ["create-project-origin", id],
+      mutationFn: createProjectGitHostOrigin,
+      onSuccess(success) {
+        if (!success) {
+          toast.error("Failed to add git host origin");
+          return;
+        }
+
+        toast.success("Git host origin added successfully");
+        setIsAddOriginOpen(false);
+        resetAddOrigin();
+        queryClient.invalidateQueries({
+          queryKey: ["project-githost-origins", id],
+        });
+      },
+    },
+  );
+
   const handleCreate = (input: CreateEnvironmentInput) => {
     if (creatingEnvironment) return;
 
     _createEnvironment(input);
+  };
+
+  const getProviderFromUrl = (url: string): GitHostProvider | null => {
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+
+      if (hostname.includes("github.com")) return "github";
+      if (hostname.includes("gitlab.com")) return "gitlab";
+
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleAddOrigin = async (input: {
+    originName: string;
+    url: string;
+  }) => {
+    if (creatingOrigin) return;
+
+    const originName = input.originName.trim();
+    const originUrl = input.url.trim();
+
+    if (!originName) {
+      toast.error("Origin name is required");
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(originUrl);
+    } catch {
+      toast.error("Invalid URL. Please provide a valid git host URL.");
+      return;
+    }
+
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      toast.error("Only HTTP/HTTPS git host URLs are supported.");
+      return;
+    }
+
+    const provider = getProviderFromUrl(originUrl);
+    if (!provider) {
+      toast.error(
+        "Unsupported git host URL. Use a GitHub or GitLab repository URL.",
+      );
+      return;
+    }
+
+    if (!(configuredProviders?.includes(provider) ?? false)) {
+      toast.error(
+        `Project is not authorized with ${provider}. Please authorize it first.`,
+      );
+      return;
+    }
+
+    const duplicateOrigin = projectOrigins?.some(
+      (origin) => origin.name.toLowerCase() === originName.toLowerCase(),
+    );
+    if (duplicateOrigin) {
+      toast.error("An origin with this name already exists.");
+      return;
+    }
+
+    await _createOrigin({
+      projectId: id,
+      hostName: originName,
+      hostUrl: originUrl,
+    });
   };
 
   if (loadingProject) {
@@ -197,6 +390,251 @@ export default function EnvironmentsPage({
           </DialogContent>
         </Dialog>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base">Configured Git Hosts</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Git providers linked to this project.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Dialog open={isHostsOpen} onOpenChange={setIsHostsOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  View Origins
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Configured Origins</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                  {loadingOrigins ? (
+                    <Loader />
+                  ) : !projectOrigins?.length ? (
+                    <p className="text-sm text-muted-foreground">
+                      No origins configured for this project.
+                    </p>
+                  ) : (
+                    projectOrigins.map((origin) => (
+                      <div
+                        key={origin.id}
+                        className="rounded-md border p-3 text-sm"
+                      >
+                        <p className="font-medium">{origin.name}</p>
+                        <p className="text-muted-foreground">
+                          {origin.githost}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {origin.repoUrl}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={isAddOriginOpen}
+              onOpenChange={(open) => {
+                setIsAddOriginOpen(open);
+                if (!open) resetAddOrigin();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button size="sm">Add Origin</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Git Host Origin</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="origin-name">Origin name</Label>
+                    <Controller
+                      name="originName"
+                      control={addOriginControl}
+                      rules={{
+                        required: {
+                          value: true,
+                          message: "This field is required",
+                        },
+                      }}
+                      render={({
+                        field: { value, onBlur, onChange },
+                        fieldState: { error },
+                      }) => (
+                        <Input
+                          id="origin-name"
+                          placeholder="web"
+                          value={value}
+                          onBlur={onBlur}
+                          onChange={onChange}
+                          helperText={error?.message}
+                        />
+                      )}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="origin-url">Repository URL</Label>
+                    <Controller
+                      name="url"
+                      control={addOriginControl}
+                      rules={{
+                        required: {
+                          value: true,
+                          message: "This field is required",
+                        },
+                      }}
+                      render={({
+                        field: { value, onBlur, onChange },
+                        fieldState: { error },
+                      }) => (
+                        <Input
+                          id="origin-url"
+                          placeholder="https://github.com/acme/web"
+                          value={value}
+                          onBlur={onBlur}
+                          onChange={onChange}
+                          helperText={error?.message}
+                        />
+                      )}
+                    />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Only GitHub and GitLab repository URLs are supported, and
+                    the matching provider must already be authorized for this
+                    project.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsAddOriginOpen(false);
+                      resetAddOrigin();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    loading={creatingOrigin}
+                    onClick={submitAddOrigin(handleAddOrigin)}
+                  >
+                    Add Origin
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingProviders ? (
+            <Loader />
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {availableProviders.map((provider) => {
+                const isConfigured =
+                  configuredProviders?.includes(provider) ?? false;
+
+                return (
+                  <div
+                    key={provider}
+                    className="flex items-center justify-between rounded-md border p-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium capitalize">
+                        {provider}
+                      </p>
+                      <Badge variant={isConfigured ? "secondary" : "outline"}>
+                        {isConfigured ? "Configured" : "Not configured"}
+                      </Badge>
+                    </div>
+
+                    {isConfigured ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={authorizingProvider || loggingOutProvider}
+                        onClick={() => setLogoutProvider(provider)}
+                      >
+                        Logout
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        loading={authorizingProvider}
+                        disabled={authorizingProvider || loggingOutProvider}
+                        onClick={() => _authorizeProvider(provider)}
+                      >
+                        Authorize
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={!!logoutProvider}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLogoutProvider(null);
+            setRemoveOrigins(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="capitalize">
+              Logout {logoutProvider}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Remove this project&apos;s authorization with {logoutProvider}.
+            </p>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="text-sm font-medium">Remove associated origins</p>
+                <p className="text-xs text-muted-foreground">
+                  This also deletes origins linked to this provider.
+                </p>
+              </div>
+              <Switch
+                checked={removeOrigins}
+                onCheckedChange={setRemoveOrigins}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLogoutProvider(null);
+                setRemoveOrigins(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              loading={loggingOutProvider}
+              onClick={() => logoutProvider && _logoutProvider(logoutProvider)}
+            >
+              Logout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {loadingEnvironments ? (
         <Loader />

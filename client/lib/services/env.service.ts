@@ -1,6 +1,6 @@
 import { apiClient } from ".";
 import { Environment, EnvVersion } from "../types";
-import { ApiResponse } from "../types/api";
+import { ApiResponse, DeploySecretsDto } from "../types/api";
 import { errorHandler } from "../utils";
 
 export async function getProjectEnvironments(projectId: string) {
@@ -100,6 +100,19 @@ export async function createEnvironment(
       },
     );
     return response.data?.data;
+  } catch (error) {
+    errorHandler(error);
+  }
+}
+
+export async function deploySecrets(body: DeploySecretsDto) {
+  try {
+    const response = await apiClient.post<ApiResponse<null>>(
+      "/environment/deploy-secrets",
+      body,
+    );
+
+    return response.data?.success ?? false;
   } catch (error) {
     errorHandler(error);
   }

@@ -141,10 +141,12 @@ export default function LandingPage() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
-            <Button variant="outline" size="lg">
-              View Docs
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
+            <Link href="/docs">
+              <Button variant="outline" size="lg">
+                View Docs
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </Link>
           </div>
 
           {/* Code snippet preview */}
@@ -168,8 +170,7 @@ export default function LandingPage() {
                 {"  "}Authenticated as alex@envx.dev
               </p>
               <p className="mt-2 text-muted-foreground">
-                <span className="text-chart-2">$</span> envx pull --env
-                production
+                <span className="text-chart-2">$</span> envx pull -e production
               </p>
               <p className="text-muted-foreground/60">
                 {"  "}Pulled 24 variables to .env.production

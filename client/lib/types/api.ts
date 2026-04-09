@@ -15,3 +15,15 @@ export type CreateProjectDto = {
   organizationId: string;
   description?: string;
 };
+
+export type EnvDeployTarget = "environment" | "action";
+
+export type DeploySecretsDto = {
+  envSlug: string;
+  projectId?: string;
+  githostEnvironment?: string;
+  githostOrigin: string;
+  version?: number;
+  noMerge?: boolean;
+  deployTarget: EnvDeployTarget;
+};
