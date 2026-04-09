@@ -347,8 +347,6 @@ githostCommand
         process.exit(1);
       }
 
-      logger.log(`Deploying secrets from '${fromEnv}' to '${originName}'...`);
-
       const success = await envService.deploySecrets({
         envSlug: fromEnv,
         projectId,
