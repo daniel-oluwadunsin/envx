@@ -2,6 +2,7 @@ import { apiClient } from "../configs/axios.config";
 import {
   ApiResponse,
   CreateEnvDto,
+  DeploySecretsDto,
   Environment,
   GetEnvDto,
 } from "../types/api";
@@ -51,5 +52,14 @@ export const envService = {
     );
 
     return response.data?.data;
+  },
+
+  async deploySecrets(body: DeploySecretsDto): Promise<boolean> {
+    const response = await apiClient.post<ApiResponse<null>>(
+      "/environment/deploy-secrets",
+      body,
+    );
+
+    return response.data?.success ?? false;
   },
 };

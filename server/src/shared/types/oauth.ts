@@ -72,7 +72,7 @@ export type CreateGithubEnvrionmentDto = {
 };
 
 export type CreateGitlabEnvrionmentDto = {
-  projectId: number;
+  projectId?: number;
   name: string;
 };
 
@@ -86,6 +86,7 @@ export type GetHttpInstanceProps = {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: Date;
+  installationId?: string;
   updateAccessToken?: (token: string, expiresAt?: Date) => void;
 };
 
@@ -119,7 +120,7 @@ export type CreateSecretRequest = MakeOAuthRequest &
   AltProjectRequestParams & {
     name?: string;
     value?: string;
-    envrionmentName?: string;
+    environmentName?: string;
   };
 
 export type GetSecretsRequest = MakeOAuthRequest &
@@ -132,6 +133,12 @@ export type GetSecretsResponse = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export type DeleteSecretRequest = MakeOAuthRequest &
+  AltProjectRequestParams & {
+    name: string;
+    environmentName?: string;
+  };
 
 export type GetSecretPublicKeyRequest = MakeOAuthRequest &
   AltProjectRequestParams & {

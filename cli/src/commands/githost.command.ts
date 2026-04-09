@@ -1,5 +1,5 @@
 import inquirer from "inquirer";
-import { GitHosts } from "../enums/githost.enum";
+import { EnvDeployTarget, GitHosts } from "../enums/githost.enum";
 import envxProgram from "../program";
 import Logger from "../utils/logger";
 import {
@@ -11,6 +11,7 @@ import {
 import { githostService } from "../services/githost.service";
 import open from "open";
 import { AxiosError } from "axios";
+import { envService } from "../services/env.service";
 
 const logger = new Logger("githost");
 
@@ -21,7 +22,7 @@ const githostCommand = envxProgram
 const validateGitHost = (provider: string) => {
   const validProviders = Object.values(GitHosts);
   if (!validProviders.includes(provider as GitHosts)) {
-    console.error(
+    logger.error(
       `Invalid provider. Valid options are: ${validProviders.join(", ")}`,
     );
     process.exit(1);
@@ -33,7 +34,7 @@ githostCommand.command("authorize [provider]").action(async (provider) => {
     const config = await getConfigFileContent();
 
     if (!config?.projectId) {
-      console.error("No project ID found in config file.");
+      logger.error("No project ID found in config file.");
       process.exit(1);
     }
 
@@ -116,6 +117,7 @@ githostCommand.command("authorize [provider]").action(async (provider) => {
       logger.error(parseError(error));
       process.exit(1);
     }
+    throw error;
   }
 });
 
@@ -128,7 +130,7 @@ githostCommand
     const config = await getConfigFileContent();
 
     if (!config?.projectId) {
-      console.error("No project ID found in config file.");
+      logger.error("No project ID found in config file.");
       process.exit(1);
     }
 
@@ -185,7 +187,7 @@ githostCommand
       const config = await getConfigFileContent();
 
       if (!config?.projectId) {
-        console.error("No project ID found in config file.");
+        logger.error("No project ID found in config file.");
         process.exit(1);
       }
 
@@ -230,6 +232,7 @@ githostCommand
         logger.error(parseError(error));
         process.exit(1);
       }
+      throw error;
     }
   });
 
@@ -238,7 +241,7 @@ githostCommand.command("get-hosts [provider]").action(async (provider) => {
     const config = await getConfigFileContent();
 
     if (!config?.projectId) {
-      console.error("No project ID found in config file.");
+      logger.error("No project ID found in config file.");
       process.exit(1);
     }
 
@@ -266,5 +269,110 @@ githostCommand.command("get-hosts [provider]").action(async (provider) => {
       logger.error(parseError(error));
       process.exit(1);
     }
+    throw error;
   }
 });
+
+githostCommand
+  .command("deploy <originName> <deployTarget>")
+  .description("Deploy secrets to a git host origin")
+  .option(
+    "-e, --environment <envxEnvironment>",
+    "Envx environment, if not specified, it will be taken from the config file",
+  )
+  .option(
+    "-v, --version <version>",
+    "The version number, latest number will be used if empty",
+  )
+  .option(
+    "--ge, --githost-environment <githostEnvironment>",
+    "Githost environment to deploy the secret to.",
+  )
+  .option("--no-merge", "To delete any other secret that isn't in the env file")
+  .action(async (originName, deployTarget, options) => {
+    try {
+      const { envxEnvironment, version, githostEnvironment, merge } = options;
+
+      if (!Object.values(EnvDeployTarget).includes(deployTarget)) {
+        logger.error(
+          `Invalid deploy target. Valid options are: ${Object.values(
+            EnvDeployTarget,
+          ).join(", ")}`,
+        );
+        process.exit(1);
+      }
+
+      if (deployTarget === EnvDeployTarget.Environment && !githostEnvironment) {
+        logger.error(
+          `Githost environment is required when deploy target is 'environment'. Please specify it using --githost-environment option.`,
+        );
+        process.exit(1);
+      }
+
+      const config = await getConfigFileContent();
+      const projectId = config?.projectId;
+      const fromEnv = envxEnvironment || config?.environment;
+      const toEnv = githostEnvironment;
+
+      if (!projectId) {
+        logger.error("No project ID found in config file.");
+        process.exit(1);
+      }
+
+      if (!fromEnv) {
+        logger.error(
+          "No source environment specified. Please provide an environment using --environment option or set a default environment in the config file.",
+        );
+        process.exit(1);
+      }
+
+      logger.info("Fetching environment details...");
+
+      const envDetails = await envService.getProjectEnvironmentBySlug(
+        projectId,
+        fromEnv,
+      );
+
+      if (!envDetails) {
+        logger.error(
+          `Environment '${fromEnv}' not found in project. Please check the environment name and try again.`,
+        );
+        process.exit(1);
+      }
+
+      if (version && version > envDetails.latestVersion) {
+        logger.error(
+          `Specified version ${version} does not exist. Latest version is ${envDetails.latestVersion}. Please check the version number and try again.`,
+        );
+        process.exit(1);
+      }
+
+      logger.log(`Deploying secrets from '${fromEnv}' to '${originName}'...`);
+
+      const success = await envService.deploySecrets({
+        envSlug: fromEnv,
+        projectId,
+        githostEnvironment: toEnv,
+        version,
+        noMerge: !merge,
+        deployTarget,
+        githostOrigin: originName,
+      });
+
+      if (success) {
+        logger.success(
+          `Successfully deployed secrets from '${fromEnv}' to '${originName}'.`,
+        );
+      } else {
+        logger.error(
+          `Failed to deploy secrets from '${fromEnv}' to '${originName}'. Please try again.`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        logger.error(parseError(error));
+        process.exit(1);
+      }
+      throw error;
+    }
+  });

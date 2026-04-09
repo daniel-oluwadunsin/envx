@@ -13,6 +13,7 @@ import {
   GetSecretsResponse,
   GetSecretPublicKeyRequest,
   GetSecretPublicKeyResponse,
+  DeleteSecretRequest,
 } from 'src/shared/types/oauth';
 
 export interface OAuthProviderInterface {
@@ -22,7 +23,9 @@ export interface OAuthProviderInterface {
 
   getOAuthUrl(state: string, redirectUrl?: string): string;
 
-  exchangeCodeForToken(
+  getInstallationToken?(installationId: string): Promise<string>;
+
+  exchangeCodeForToken?(
     code: string,
     state: string,
     redirectUrl?: string,
@@ -38,6 +41,11 @@ export interface OAuthProviderInterface {
     props: GetEnvironmentsRequest,
   ): Promise<GetEnvironmentsResponse[]>;
 
+  getSingleEnvironment(
+    props: GetEnvironmentsRequest,
+    environmentName: string,
+  ): Promise<GetEnvironmentsResponse | null>;
+
   createEnvironment(
     props: CreateEnvironmentRequest,
   ): Promise<GetEnvironmentsResponse>;
@@ -49,4 +57,6 @@ export interface OAuthProviderInterface {
   getSecretPublicKey?(
     props: GetSecretPublicKeyRequest,
   ): Promise<GetSecretPublicKeyResponse>;
+
+  deleteSecret?(props: DeleteSecretRequest): Promise<void>;
 }

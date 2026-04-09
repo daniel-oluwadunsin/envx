@@ -1,4 +1,4 @@
-import { GitHosts } from "../enums/githost.enum";
+import { EnvDeployTarget, GitHosts } from "../enums/githost.enum";
 
 export type ApiResponse<T> = {
   success: true;
@@ -45,6 +45,16 @@ export type CreateGitHostOriginDto = {
   projectId: string;
   hostName: string;
   hostUrl: string;
+};
+
+export type DeploySecretsDto = {
+  envSlug: string;
+  projectId?: string;
+  githostEnvironment?: string;
+  githostOrigin?: string;
+  version?: number;
+  noMerge?: boolean;
+  deployTarget: EnvDeployTarget;
 };
 
 // ======== ENTITY TYPES ========

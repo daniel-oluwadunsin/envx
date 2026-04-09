@@ -9,6 +9,7 @@ import { PrismaService } from '../database/database.service';
 import {
   CreateProjectDto,
   CreateProjectGitHostOriginDto,
+  GithubInstallationWebhookDto,
   InitiateProjectOAuthDto,
   LogOutProjectOAuthDto,
 } from './dtos';
@@ -34,6 +35,14 @@ import { MakeOAuthRequest, OAuthProvider } from 'src/shared/types/oauth';
 export class ProjectService {
   private readonly logger: Logger;
 
+  private githubInstallRefCacheKey(ref: string) {
+    return `github:install:ref:${ref}`;
+  }
+
+  private githubInstallationProjectCacheKey(installationId: string) {
+    return `github:installation:project:${installationId}`;
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
@@ -46,6 +55,77 @@ export class ProjectService {
     @Inject(REDIS_PROVIDER) private readonly redis: Redis,
   ) {
     this.logger = new Logger(ProjectService.name);
+  }
+
+  private getGithubInstallRedirectUrl(ref: string) {
+    const configuredUrl = this.configService.get<string>(
+      'GITHUB_INSTALL_REDIRECT_URI',
+    );
+
+    if (!configuredUrl) {
+      throw new BadRequestException(
+        'GITHUB_INSTALL_REDIRECT_URI must be configured for GitHub installation flow',
+      );
+    }
+
+    const redirectUrl = new URL(configuredUrl);
+    redirectUrl.pathname = `${redirectUrl.pathname.replace(/\/$/, '')}?state=${ref}`;
+
+    return redirectUrl.toString();
+  }
+
+  private verifyGithubWebhookSignature(
+    signature: string | undefined,
+    rawBody: Buffer | undefined,
+  ) {
+    const secret = this.configService.get<string>('GITHUB_WEBHOOK_SECRET');
+
+    if (!secret) {
+      return;
+    }
+
+    if (!signature || !rawBody) {
+      throw new BadRequestException('Missing GitHub webhook signature headers');
+    }
+
+    const expectedSignature = `sha256=${crypto
+      .createHmac('sha256', secret)
+      .update(rawBody)
+      .digest('hex')}`;
+
+    const providedSignature = Buffer.from(signature);
+    const computedSignature = Buffer.from(expectedSignature);
+
+    if (providedSignature.length !== computedSignature.length) {
+      throw new BadRequestException('Invalid GitHub webhook signature');
+    }
+
+    const isValid = crypto.timingSafeEqual(
+      providedSignature,
+      computedSignature,
+    );
+
+    if (!isValid) {
+      throw new BadRequestException('Invalid GitHub webhook signature');
+    }
+  }
+
+  private async issueAndStoreGithubInstallationToken(
+    projectId: string,
+    installationId: string,
+  ) {
+    const token =
+      await this.githubProvider.createInstallationAccessToken(installationId);
+
+    await this.prisma.projects.update({
+      where: { id: projectId },
+      data: {
+        githubToken: token.accessToken,
+        githubTokenExpiresAt: token.expiresAt,
+        githubInstallationId: installationId,
+        githubOAuthCompletedAt: new Date(),
+      },
+    });
   }
 
   async getProjectGitHostTokens(
@@ -69,7 +149,18 @@ export class ProjectService {
       ? {
           accessToken: project.githubToken,
           expiresAt: project.githubTokenExpiresAt,
-          refreshToken: project.githubRefreshToken,
+          installationId: project.githubInstallationId,
+          updateAccessToken: async (accessToken, expiresAt) => {
+            await this.prisma.projects.update({
+              where: {
+                id: projectId,
+              },
+              data: {
+                githubToken: accessToken,
+                githubTokenExpiresAt: expiresAt,
+              },
+            });
+          },
         }
       : {
           accessToken: project.gitlabToken,
@@ -386,6 +477,31 @@ export class ProjectService {
       );
     }
 
+    if (provider === 'github') {
+      const installRef = crypto.randomBytes(24).toString('hex');
+      const installUrl = this.githubProvider.getOAuthUrl(
+        '',
+        this.getGithubInstallRedirectUrl(installRef),
+        installRef,
+      );
+
+      await this.redis.set(
+        this.githubInstallRefCacheKey(installRef),
+        JSON.stringify({ projectId, userId }),
+        'EX',
+        60 * 30,
+      );
+
+      return {
+        success: true,
+        message: 'GitHub installation initiated',
+        data: {
+          url: installUrl,
+          state: installRef,
+        },
+      };
+    }
+
     const state = crypto.randomBytes(16).toString('hex');
 
     const expiresAt = add(new Date(), { minutes: 10 });
@@ -416,6 +532,12 @@ export class ProjectService {
   }
 
   async handleProjectOAuthCallback(body: OAuthCallbackDto) {
+    if (body.provider === 'github') {
+      throw new BadRequestException(
+        'GitHub OAuth callback is disabled. Use GitHub installation callback endpoint instead.',
+      );
+    }
+
     const initOAuth = await this.prisma.initOAuth.findFirst({
       where: {
         provider: body.provider,
@@ -452,30 +574,17 @@ export class ProjectService {
     });
 
     const { accessToken, refreshToken, expiresAt } =
-      body.provider === 'github'
-        ? await this.githubProvider.exchangeCodeForToken(
-            body.code,
-            initOAuth.redirectUrl,
-          )
-        : await this.gitlabProvider.exchangeCodeForToken(
-            body.code,
-            initOAuth.redirectUrl,
-          );
+      await this.gitlabProvider.exchangeCodeForToken(
+        body.code,
+        initOAuth.redirectUrl,
+      );
 
-    const updateData: Prisma.ProjectsUpdateInput =
-      body.provider === 'github'
-        ? {
-            githubToken: accessToken,
-            githubOAuthCompletedAt: new Date(),
-            githubRefreshToken: refreshToken,
-            githubTokenExpiresAt: expiresAt,
-          }
-        : {
-            gitlabToken: accessToken,
-            gitlabOAuthCompletedAt: new Date(),
-            gitlabTokenExpiresAt: expiresAt,
-            gitlabRefreshToken: refreshToken,
-          };
+    const updateData: Prisma.ProjectsUpdateInput = {
+      gitlabToken: accessToken,
+      gitlabOAuthCompletedAt: new Date(),
+      gitlabTokenExpiresAt: expiresAt,
+      gitlabRefreshToken: refreshToken,
+    };
 
     await this.prisma.projects.update({
       where: { id: initOAuth.projectId },
@@ -489,6 +598,130 @@ export class ProjectService {
     const redirectUrl = `${this.configService.get('FRONTEND_URL')}/oauth?oauth_status=success`;
 
     return redirectUrl;
+  }
+
+  async handleGithubInstallationCallback(installationId: string, ref?: string) {
+    if (!installationId) {
+      throw new BadRequestException(
+        'Missing installation_id in GitHub installation callback',
+      );
+    }
+
+    let projectId: string | null = null;
+
+    if (ref) {
+      const payload = await this.redis.get(this.githubInstallRefCacheKey(ref));
+
+      if (payload) {
+        projectId = (JSON.parse(payload) as { projectId: string }).projectId;
+        await this.redis.del(this.githubInstallRefCacheKey(ref));
+      }
+    }
+
+    if (!projectId) {
+      const linkedProject = await this.prisma.projects.findFirst({
+        where: {
+          githubInstallationId: installationId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      projectId = linkedProject?.id || null;
+    }
+
+    await this.redis.set(
+      this.githubInstallationProjectCacheKey(installationId),
+      projectId,
+      'EX',
+      60 * 60 * 24,
+    );
+
+    await this.issueAndStoreGithubInstallationToken(projectId, installationId);
+
+    const redirectUrl = `${this.configService.get('FRONTEND_URL')}/oauth?oauth_status=success`;
+
+    return redirectUrl;
+  }
+
+  async handleGithubInstallationWebhook({
+    signature,
+    rawBody,
+    payload,
+    event,
+  }: {
+    signature?: string;
+    rawBody?: Buffer;
+    payload: GithubInstallationWebhookDto;
+    event?: string;
+  }) {
+    this.verifyGithubWebhookSignature(signature, rawBody);
+
+    if (event !== 'installation' && event !== 'installation_repositories') {
+      return;
+    }
+
+    const installationId = payload?.installation?.id;
+    if (!installationId) {
+      return;
+    }
+
+    const installationIdString = String(installationId);
+    let projectId = await this.redis.get(
+      this.githubInstallationProjectCacheKey(installationIdString),
+    );
+
+    if (!projectId) {
+      const linkedProject = await this.prisma.projects.findFirst({
+        where: {
+          githubInstallationId: installationIdString,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      projectId = linkedProject?.id || null;
+    }
+
+    if (!projectId) {
+      this.logger.warn(
+        `No project mapping found for GitHub installation ${installationIdString}`,
+      );
+      return;
+    }
+
+    if (payload.action === 'deleted') {
+      await this.prisma.projects.updateMany({
+        where: {
+          OR: [
+            { id: projectId },
+            { githubInstallationId: installationIdString },
+          ],
+        },
+        data: {
+          githubToken: null,
+          githubTokenExpiresAt: null,
+          githubInstallationId: null,
+          githubOAuthCompletedAt: null,
+        },
+      });
+
+      return;
+    }
+
+    await this.redis.set(
+      this.githubInstallationProjectCacheKey(installationIdString),
+      projectId,
+      'EX',
+      60 * 60 * 24,
+    );
+
+    await this.issueAndStoreGithubInstallationToken(
+      projectId,
+      installationIdString,
+    );
   }
 
   async verifyProjectOAuth(
@@ -536,7 +769,7 @@ export class ProjectService {
         ? {
             githubToken: null,
             githubOAuthCompletedAt: null,
-            githubRefreshToken: null,
+            githubInstallationId: null,
             githubTokenExpiresAt: null,
           }
         : {

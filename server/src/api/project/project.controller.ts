@@ -1,14 +1,25 @@
-import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ProjectService } from './project.service';
 import {
   CreateProjectDto,
   CreateProjectGitHostOriginDto,
+  GithubInstallationCallbackDto,
+  GithubInstallationWebhookDto,
   InitiateProjectOAuthDto,
   LogOutProjectOAuthDto,
 } from './dtos';
 import { Auth, IsPublic } from 'src/shared/decorators/auth.decorators';
 import { OAuthCallbackDto } from 'src/shared/interfaces';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { MongoIdPipe } from 'src/core/pipes';
 import { OAuthProvider } from 'src/shared/types/oauth';
 
@@ -58,6 +69,41 @@ export class ProjectController {
       await this.projectService.handleProjectOAuthCallback(query);
 
     res.redirect(redirectUrl);
+  }
+
+  @Get('github/install/callback')
+  @IsPublic()
+  async handleGithubInstallCallback(
+    @Query() query: GithubInstallationCallbackDto,
+    @Res() res: Response,
+  ) {
+    const redirectUrl =
+      await this.projectService.handleGithubInstallationCallback(
+        query.installation_id,
+        query.state,
+      );
+
+    res.redirect(redirectUrl);
+  }
+
+  @Post('github/webhook')
+  @IsPublic()
+  async githubWebhook(
+    @Req() req: Request,
+    @Body() body: GithubInstallationWebhookDto,
+  ) {
+    const signature = req.headers['x-hub-signature-256'];
+
+    await this.projectService.handleGithubInstallationWebhook({
+      signature: Array.isArray(signature) ? signature[0] : signature,
+      rawBody: req['rawBody'],
+      payload: body,
+      event: Array.isArray(req.headers['x-github-event'])
+        ? req.headers['x-github-event'][0]
+        : req.headers['x-github-event'],
+    });
+
+    return { success: true };
   }
 
   @Get('oauth/verify')

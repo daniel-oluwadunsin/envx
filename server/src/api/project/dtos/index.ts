@@ -46,3 +46,21 @@ export class CreateProjectGitHostOriginDto {
   @IsString(false)
   hostUrl: string;
 }
+
+export class GithubInstallationCallbackDto {
+  @IsString(true)
+  state?: string;
+
+  @IsString(false)
+  installation_id: string;
+
+  @IsString(true)
+  setup_action?: string;
+}
+
+export class GithubInstallationWebhookDto {
+  installation?: {
+    id?: number;
+  };
+  action?: string;
+}

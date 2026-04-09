@@ -1,10 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { OAuthProviderInterface } from './oauth-provider.interface';
 import axios, { Axios } from 'axios';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import * as crypto from 'crypto';
 import {
   CreateEnvironmentRequest,
   CreateSecretRequest,
+  DeleteSecretRequest,
   GetEnvironmentsRequest,
   GetEnvironmentsResponse,
   GetHttpInstanceProps,
@@ -22,16 +24,16 @@ import {
 } from 'src/shared/types/oauth';
 import { UtilsService } from 'src/shared/services/utils.service';
 
+@Injectable()
 export class GithubProvider implements OAuthProviderInterface {
   readonly provider = 'github';
-  readonly baseUrl: string;
+  readonly baseUrl = 'https://api.github.com';
   readonly httpInstance: Axios;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly utilService: UtilsService,
   ) {
-    this.baseUrl = 'https://api.github.com';
     this.httpInstance = axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -40,54 +42,123 @@ export class GithubProvider implements OAuthProviderInterface {
     });
   }
 
-  getOAuthUrl(state: string, redirectUrl?: string) {
-    const clientId = process.env['GITHUB_CLIENT_ID'];
-    const redirectUri = redirectUrl;
+  private generateAppJWT(): string {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKey = process.env.GITHUB_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-    const scope = 'read:user read:org repo admin:repo_hook workflow';
-
-    const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}`;
-
-    return url;
-  }
-
-  async exchangeCodeForToken(
-    code: string,
-    redirectUrl?: string,
-  ): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: Date }> {
-    const tokenUrl = 'https://github.com/login/oauth/access_token';
-    const clientId = process.env['GITHUB_CLIENT_ID'];
-    const clientSecret = process.env['GITHUB_CLIENT_SECRET'];
-
-    const requestBody = {
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      redirect_uri: redirectUrl,
-    };
-
-    const response = await axios.post<string>(tokenUrl, requestBody);
-
-    const params = new URLSearchParams(response.data);
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    const expiresIn = params.get('expires_in');
-
-    let expiresAt: Date | undefined;
-    if (expiresIn) {
-      expiresAt = new Date(Date.now() + parseInt(expiresIn) * 1000);
-    }
-
-    if (!accessToken) {
+    if (!appId || !privateKey) {
       throw new BadRequestException(
-        'Failed to obtain access token from GitHub',
+        'GITHUB_APP_ID and GITHUB_PRIVATE_KEY must be configured',
       );
     }
 
-    return { accessToken, refreshToken, expiresAt };
+    const now = Math.floor(Date.now() / 1000);
+
+    const encodedHeader = Buffer.from(
+      JSON.stringify({ alg: 'RS256', typ: 'JWT' }),
+    )
+      .toString('base64url')
+      .replace(/=/g, '');
+
+    const encodedPayload = Buffer.from(
+      JSON.stringify({ iat: now - 60, exp: now + 600, iss: appId }),
+    )
+      .toString('base64url')
+      .replace(/=/g, '');
+
+    const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+    const signature = crypto
+      .createSign('RSA-SHA256')
+      .update(unsignedToken)
+      .end()
+      .sign(privateKey)
+      .toString('base64url')
+      .replace(/=/g, '');
+
+    return `${unsignedToken}.${signature}`;
+  }
+
+  getOAuthUrl(_: string, redirectUrl?: string, state?: string) {
+    const appName = process.env.GITHUB_APP_SLUG;
+
+    if (!appName) {
+      throw new BadRequestException('GITHUB_APP_SLUG must be configured');
+    }
+
+    const url = new URL(
+      `https://github.com/apps/${appName}/installations/new?state=${state}`,
+    );
+
+    if (redirectUrl) {
+      url.searchParams.set('redirect_url', redirectUrl);
+    }
+
+    return url.toString();
+  }
+
+  async exchangeCodeForToken(
+    _code: string,
+    _redirectUrl?: string,
+  ): Promise<{ accessToken: string; refreshToken?: string; expiresAt?: Date }> {
+    throw new BadRequestException(
+      'GitHub OAuth code exchange is not supported. Use GitHub App installation flow.',
+    );
+  }
+
+  async createInstallationAccessToken(
+    installationId: string,
+  ): Promise<TokenResponse> {
+    if (!installationId) {
+      throw new BadRequestException('GitHub installation id is required');
+    }
+
+    const jwtToken = this.generateAppJWT();
+    const res = await axios.post(
+      `https://api.github.com/app/installations/${installationId}/access_tokens`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
+    );
+
+    if (!res.data?.token) {
+      throw new BadRequestException(
+        'Failed to create GitHub installation token',
+      );
+    }
+
+    return {
+      accessToken: res.data.token,
+      expiresAt: res.data.expires_at
+        ? new Date(res.data.expires_at)
+        : undefined,
+    };
+  }
+
+  async refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
+    return this.createInstallationAccessToken(refreshToken);
   }
 
   async getHttpInstance(props: GetHttpInstanceProps): Promise<Axios> {
+    const shouldRefresh =
+      !props.accessToken ||
+      (!!props.expiresAt && props.expiresAt.getTime() <= Date.now() + 60_000);
+
+    if (shouldRefresh && props.refreshToken) {
+      const token = await this.refreshAccessToken(props.refreshToken);
+      props.accessToken = token.accessToken;
+      props.expiresAt = token.expiresAt;
+      await props.updateAccessToken?.(token.accessToken, token.expiresAt);
+    }
+
+    if (!props.accessToken) {
+      throw new BadRequestException('GitHub access token is not configured');
+    }
+
     return axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -99,7 +170,6 @@ export class GithubProvider implements OAuthProviderInterface {
 
   async getRepo(props: GetRepoRequest): Promise<GetRepoResponse> {
     const http = await this.getHttpInstance(props);
-
     const response = await http.get<GithubRepo>(`/repos/${props.repoFullPath}`);
 
     return {
@@ -116,29 +186,48 @@ export class GithubProvider implements OAuthProviderInterface {
     props: GetEnvironmentsRequest,
   ): Promise<GetEnvironmentsResponse[]> {
     const http = await this.getHttpInstance(props);
-
     const response = await http.get<{ environments: GithubRepoEnvironment[] }>(
       `/repos/${props.repoFullPath}/environments`,
     );
 
-    const data = response.data.environments.map(
-      (environment): GetEnvironmentsResponse => ({
-        id: environment.id,
-        name: environment.name,
-        url: environment.url,
-        createdAt: new Date(environment.created_at),
-        updatedAt: new Date(environment.updated_at),
-      }),
-    );
+    return response.data.environments.map((env) => ({
+      id: env.id,
+      name: env.name,
+      url: env.url,
+      createdAt: new Date(env.created_at),
+      updatedAt: new Date(env.updated_at),
+    }));
+  }
 
-    return data;
+  async getSingleEnvironment(
+    props: GetEnvironmentsRequest,
+    environmentName: string,
+  ): Promise<GetEnvironmentsResponse | null> {
+    const http = await this.getHttpInstance(props);
+
+    try {
+      const response = await http.get<GithubRepoEnvironment>(
+        `/repos/${props.repoFullPath}/environments/${environmentName}`,
+      );
+
+      return {
+        id: response.data.id,
+        name: response.data.name,
+        url: response.data.url,
+        createdAt: new Date(response.data.created_at),
+        updatedAt: new Date(response.data.updated_at),
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404)
+        return null;
+      throw error;
+    }
   }
 
   async createEnvironment(
     props: CreateEnvironmentRequest,
   ): Promise<GetEnvironmentsResponse> {
     const http = await this.getHttpInstance(props);
-
     const response = await http.put<GithubRepoEnvironment>(
       `/repos/${props.repoFullPath}/environments/${props.environmentName}`,
       {},
@@ -157,43 +246,39 @@ export class GithubProvider implements OAuthProviderInterface {
     props: GetSecretPublicKeyRequest,
   ): Promise<GetSecretPublicKeyResponse> {
     const http = await this.getHttpInstance(props);
-
     const response = await http.get<GithubPublicKey>(
       props.environmentName
         ? `/repos/${props.repoFullPath}/environments/${props.environmentName}/secrets/public-key`
         : `/repos/${props.repoFullPath}/actions/secrets/public-key`,
     );
 
-    return {
-      keyId: response.data.key_id,
-      publicKey: response.data.key,
-    };
+    return { keyId: response.data.key_id, publicKey: response.data.key };
   }
 
   async createSecret(props: CreateSecretRequest) {
     const http = await this.getHttpInstance(props);
-
     const { publicKey, keyId } = await this.getSecretPublicKey(props);
 
-    const encryptedValue = this.utilService.encryptLibSodium(
+    const encryptedValue = await this.utilService.encryptLibSodium(
       props.value,
       publicKey,
     );
 
-    await http.put<GithubRepoEnvironment>(
-      props.envrionmentName
-        ? `/repos/${props.repoFullPath}/environments/${props.envrionmentName}/secrets/${props.name}`
+    await http.put(
+      props.environmentName
+        ? `/repos/${props.repoFullPath}/environments/${props.environmentName}/secrets/${props.name}`
         : `/repos/${props.repoFullPath}/actions/secrets/${props.name}`,
+      { encrypted_value: encryptedValue, key_id: keyId },
       {
-        encrypted_value: encryptedValue,
-        key_id: keyId,
+        headers: {
+          'X-GitHub-Api-Version': '2026-03-10',
+        },
       },
     );
   }
 
   async getSecrets(props: GetSecretsRequest): Promise<GetSecretsResponse[]> {
     const http = await this.getHttpInstance(props);
-
     const response = await http.get<{ secrets: GithubSecret[] }>(
       props.environmentName
         ? `/repos/${props.repoFullPath}/environments/${props.environmentName}/secrets`
@@ -205,5 +290,14 @@ export class GithubProvider implements OAuthProviderInterface {
       createdAt: new Date(secret.created_at),
       updatedAt: new Date(secret.updated_at),
     }));
+  }
+
+  async deleteSecret(props: DeleteSecretRequest): Promise<void> {
+    const http = await this.getHttpInstance(props);
+    await http.delete(
+      props.environmentName
+        ? `/repos/${props.repoFullPath}/environments/${props.environmentName}/secrets/${props.name}`
+        : `/repos/${props.repoFullPath}/actions/secrets/${props.name}`,
+    );
   }
 }

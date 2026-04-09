@@ -8,6 +8,7 @@ import { PrismaService } from '../database/database.service';
 import {
   CreateEnvDto,
   CreateEnvironmentDto,
+  DeploySecretsDto,
   GetEnvDto,
   GetEnvVersionDto,
   RestoreEnvVersionDto,
@@ -15,6 +16,10 @@ import {
 import { ProjectService } from '../project/project.service';
 import { UtilsService } from 'src/shared/services/utils.service';
 import { UploadService } from 'src/shared/services/upload.service';
+import { GithubProvider } from 'src/shared/providers/oauth/github.provider';
+import { GitlabProvider } from 'src/shared/providers/oauth/gitlab.provider';
+import { EnvDeployTarget } from 'src/shared/enums';
+import { GetEnvironmentsResponse } from 'src/shared/types/oauth';
 
 @Injectable()
 export class EnvironmentsService {
@@ -23,6 +28,8 @@ export class EnvironmentsService {
     private readonly projectService: ProjectService,
     private readonly utilsService: UtilsService,
     private readonly uploadService: UploadService,
+    private readonly githubProvider: GithubProvider,
+    private readonly gitlabProvider: GitlabProvider,
   ) {}
 
   async createEnvironment(userId: string, body: CreateEnvironmentDto) {
@@ -516,6 +523,142 @@ export class EnvironmentsService {
         latestVersion: environment.envs[0]?.version || 0,
         lastUpdated: environment.envs[0]?.createdAt || null,
       },
+    };
+  }
+
+  async deployEnvSecret(userId: string, body: DeploySecretsDto) {
+    const {
+      envSlug,
+      projectId,
+      version,
+      deployTarget,
+      noMerge,
+      githostEnvironment,
+      githostOrigin,
+    } = body;
+
+    const envFile = await this.getEnvFile(userId, {
+      envSlug,
+      projectId,
+      version,
+    });
+
+    if (!envFile.data)
+      throw new NotFoundException('Environment file not found');
+
+    const origin = await this.prisma.projectGitHostOrigin.findFirst({
+      where: {
+        projectId,
+        name: githostOrigin,
+      },
+    });
+
+    if (!origin)
+      throw new NotFoundException('Git host origin not found for this project');
+
+    const repoInfo = this.utilsService.getGitHostInfo(origin.repoUrl);
+
+    if (!repoInfo.platform)
+      throw new NotFoundException('Unsupported git host platform');
+
+    const tokens = await this.projectService.getProjectGitHostTokens(
+      projectId,
+      repoInfo.platform,
+    );
+
+    const provider =
+      repoInfo.platform === 'github'
+        ? this.githubProvider
+        : this.gitlabProvider;
+
+    let hostEnvironment: GetEnvironmentsResponse | null = null;
+
+    if (githostEnvironment && deployTarget === EnvDeployTarget.Environment) {
+      hostEnvironment =
+        repoInfo.platform === 'github'
+          ? await this.githubProvider.getSingleEnvironment(
+              {
+                ...tokens,
+                repoFullPath: origin.repoFullPath,
+              },
+              githostEnvironment,
+            )
+          : await this.gitlabProvider
+              .getRepoEnvironments({
+                ...tokens,
+                repoFullPath: origin.repoFullPath,
+              })
+              .then((envs) =>
+                envs.find(
+                  (env) =>
+                    env.name.toLowerCase() === githostEnvironment.toLowerCase(),
+                ),
+              );
+
+      if (!hostEnvironment) {
+        await provider.createEnvironment({
+          ...tokens,
+          repoFullPath: origin.repoFullPath,
+          environmentName: githostEnvironment,
+          name: githostEnvironment,
+        });
+      }
+    }
+
+    const existingSecrets = await provider.getSecrets({
+      ...tokens,
+      repoFullPath: origin.repoFullPath,
+      environmentName:
+        repoInfo.platform === 'github'
+          ? githostEnvironment
+          : hostEnvironment?.id.toString(),
+    });
+
+    const envSecrets = Object.keys(envFile.data.envObj);
+
+    for (const secret of Object.entries(envFile.data.envObj)) {
+      const [key, value] = secret as [string, string];
+
+      await provider.createSecret({
+        ...tokens,
+        repoFullPath: origin.repoFullPath,
+        environmentName:
+          repoInfo.platform === 'github'
+            ? githostEnvironment
+            : hostEnvironment?.id.toString(),
+        name: key,
+        value: value,
+      });
+    }
+
+    if (noMerge) {
+      const secretsToDelete = existingSecrets.filter(
+        (secret) => !envSecrets.includes(secret.name),
+      );
+
+      for (const secret of secretsToDelete) {
+        console.log(
+          'Deleting secret',
+          secret.name,
+          'from environment',
+          githostEnvironment,
+        );
+
+        await provider.deleteSecret({
+          ...tokens,
+          repoFullPath: origin.repoFullPath,
+          name: secret.name,
+          environmentName:
+            repoInfo.platform === 'github'
+              ? githostEnvironment
+              : hostEnvironment?.id.toString(),
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Env deployed successfully',
     };
   }
 }

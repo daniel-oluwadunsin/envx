@@ -4,6 +4,7 @@ import { Auth } from 'src/shared/decorators/auth.decorators';
 import {
   CreateEnvDto,
   CreateEnvironmentDto,
+  DeploySecretsDto,
   GetEnvDto,
   GetEnvVersionDto,
   RestoreEnvVersionDto,
@@ -80,5 +81,13 @@ export class EnvrionmentsController {
       projectId,
       envSlug,
     );
+  }
+
+  @Post('/deploy-secrets')
+  async deploySecrets(
+    @Auth('id') userId: string,
+    @Body() body: DeploySecretsDto,
+  ) {
+    return await this.envrionmentsService.deployEnvSecret(userId, body);
   }
 }

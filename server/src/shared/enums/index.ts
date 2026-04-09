@@ -9,3 +9,8 @@ export const CacheKeys = {
   UserProjectAccess: (userId: string, projectId: string) =>
     `user:${userId}:project:${projectId}:access`,
 };
+
+export enum EnvDeployTarget {
+  Environment = 'environment',
+  Action = 'action',
+}

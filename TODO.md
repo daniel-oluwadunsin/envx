@@ -11,12 +11,10 @@
 - envx githost add gitlab-origin ....
 
 - envx githost origin/gitlab-origin deploy-secrets [enviroment/action]
-  --environment staging (only is envrionment is used not action)
-  --attach
+  --environment production
+  --version number
+  --githost-environment staging (only is envrionment is used not action)
   --no-merge
-  --use-as-variables PORT,NODE_ENV
 
-- envx githost origin/gitlab-origin remove-secret [enviroment/action]
-  --environment staging (only is envrionment is used not action)
-
-- envx githost origin attach-envrionment envx-staging githost-staging
+- envx githost origin/gitlab-origin remove-secret [enviroment/action] <env_key>
+  --githost-environment staging (only is envrionment is used not action)

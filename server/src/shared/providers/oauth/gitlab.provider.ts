@@ -5,6 +5,7 @@ import * as qs from 'qs';
 import {
   CreateEnvironmentRequest,
   CreateSecretRequest,
+  DeleteSecretRequest,
   GetEnvironmentsRequest,
   GetEnvironmentsResponse,
   GetHttpInstanceProps,
@@ -16,7 +17,9 @@ import {
   GitlabRepo,
   TokenResponse,
 } from 'src/shared/types/oauth';
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class GitlabProvider implements OAuthProviderInterface {
   readonly provider = 'gitlab';
   readonly baseUrl: string;
@@ -38,9 +41,7 @@ export class GitlabProvider implements OAuthProviderInterface {
 
     const scope = 'read_user read_api api';
 
-    console.log('Redirect URL in GitLab provider (getOAuthUrl):', redirectUri);
-
-    const url = `https://gitlab.com/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}`;
+    const url = `https://gitlab.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri || '')}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}`;
 
     return url;
   }
@@ -52,8 +53,6 @@ export class GitlabProvider implements OAuthProviderInterface {
     const tokenUrl = 'https://gitlab.com/oauth/token';
     const clientId = process.env['GITLAB_APP_ID'];
     const clientSecret = process.env['GITLAB_CLIENT_SECRET'];
-
-    console.log('Redirect URL in GitLab provider:', redirectUrl);
 
     const requestBody = {
       client_id: clientId,
@@ -98,6 +97,7 @@ export class GitlabProvider implements OAuthProviderInterface {
       client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
+      redirect_uri: process.env['GITLAB_REDIRECT_URI'],
     };
 
     const response = await axios.post<{
@@ -182,6 +182,36 @@ export class GitlabProvider implements OAuthProviderInterface {
     }));
   }
 
+  async getSingleEnvironment(
+    props: GetEnvironmentsRequest,
+    environmentName: string,
+  ): Promise<GetEnvironmentsResponse | null> {
+    const http = await this.getHttpInstance(props);
+
+    try {
+      const response = await http.get<{
+        id: number;
+        name: string;
+        created_at: string;
+        updated_at: string;
+      }>(
+        `/projects/${encodeURIComponent(props.repoFullPath)}/environments/${encodeURIComponent(environmentName)}`,
+      );
+
+      return {
+        id: response.data.id,
+        name: response.data.name,
+        createdAt: new Date(response.data.created_at),
+        updatedAt: new Date(response.data.updated_at),
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async createEnvironment(
     props: CreateEnvironmentRequest,
   ): Promise<GetEnvironmentsResponse> {
@@ -212,7 +242,7 @@ export class GitlabProvider implements OAuthProviderInterface {
         value: props.value,
         protected: false,
         masked: true,
-        environment_scope: props.envrionmentName || '*',
+        environment_scope: props.environmentName || '*',
       },
     );
 
@@ -243,5 +273,28 @@ export class GitlabProvider implements OAuthProviderInterface {
         environment_scope: variable.environment_scope,
         description: variable.description,
       }));
+  }
+
+  async deleteSecret(props: DeleteSecretRequest): Promise<void> {
+    const http = await this.getHttpInstance(props);
+
+    if (!props.environmentName) {
+      await http.delete(
+        `/projects/${encodeURIComponent(props.repoFullPath)}/variables/${encodeURIComponent(props.name)}`,
+      );
+    } else {
+      const formData = new FormData();
+      formData.append('filter[environment_scope]', props.environmentName);
+
+      await http.delete(
+        `/projects/${encodeURIComponent(props.repoFullPath)}/variables/${encodeURIComponent(props.name)}`,
+        {
+          data: formData,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+    }
   }
 }

@@ -91,7 +91,7 @@ model Projects {
   githubToken            String?
   githubOAuthCompletedAt DateTime?
   githubTokenExpiresAt   DateTime?
-  githubRefreshToken     String?
+  githubInstallationId   String?
 
   gitlabToken            String?
   gitlabOAuthCompletedAt DateTime?

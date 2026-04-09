@@ -1,6 +1,6 @@
 {
   "projectId": "69d47cded923b7e0ed8a5c92",
-  "currentEnvVersion": 1,
+  "currentEnvVersion": 2,
   "environment": "default",
   "localBackupBeforePull": true,
   "localBackupPath": ".env.local",
