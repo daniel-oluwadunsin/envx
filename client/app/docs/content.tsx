@@ -209,7 +209,7 @@ cd ../client && npm install`}</code>
             Install envx CLI from npm
           </h2>
           <pre className="overflow-x-auto rounded-lg border bg-muted/30 p-4 text-sm">
-            <code>{`npm i -g @envx/cli
+            <code>{`npm i -g envxtool-cli
 envx --version`}</code>
           </pre>
           <p className="text-sm text-muted-foreground">
@@ -363,7 +363,7 @@ envx help`}</code>
             </li>
           </ol>
           <pre className="overflow-x-auto rounded-lg border bg-muted/30 p-4 text-sm">
-            <code>{`npm i -g @envx/cli
+            <code>{`npm i -g envxtool-cli
 envx login
 envx init
 envx pull
@@ -646,7 +646,7 @@ cd cli && npm run build`}</code>
             Install the CLI Package
           </h2>
           <pre className="overflow-x-auto rounded-lg border bg-muted/30 p-4 text-sm">
-            <code>{`npm i -g @envx/cli
+            <code>{`npm i -g envxtool-cli
 envx --version`}</code>
           </pre>
         </section>
@@ -667,7 +667,7 @@ envx help [command]`}</code>
             Usage Examples
           </h2>
           <pre className="overflow-x-auto rounded-lg border bg-muted/30 p-4 text-sm">
-            <code>{`npm i -g @envx/cli
+            <code>{`npm i -g envxtool-cli
 envx login
 envx init
 envx configure

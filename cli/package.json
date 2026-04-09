@@ -1,6 +1,6 @@
 {
-  "name": "envx-cli",
-  "version": "1.0.0",
+  "name": "envxtool-cli",
+  "version": "1.1.2",
   "description": "cli tool for envx to backup envs and share them across teams",
   "keywords": [
     "cli",
@@ -30,7 +30,6 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
-    "date-fns": "^4.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
   },
@@ -40,9 +39,10 @@
     "commander": "^14.0.3",
     "inquirer": "^13.3.2",
     "keytar": "^7.9.0",
-    "open": "^11.0.0"
+    "open": "^11.0.0",
+    "date-fns": "^4.1.0"
   },
   "bin": {
-    "envx": "./dist/index.js"
+    "envx": "dist/index.js"
   }
 }

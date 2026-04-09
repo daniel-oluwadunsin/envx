@@ -161,7 +161,8 @@ export default function LandingPage() {
             </div>
             <div className="p-5 text-left font-mono text-sm leading-relaxed">
               <p className="text-muted-foreground">
-                <span className="text-chart-2">$</span> npm install -g @envx/cli
+                <span className="text-chart-2">$</span> npm install -g
+                envxtool-cli
               </p>
               <p className="mt-2 text-muted-foreground">
                 <span className="text-chart-2">$</span> envx login
